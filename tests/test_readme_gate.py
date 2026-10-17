@@ -50,6 +50,9 @@ FROZEN_STDLIB = frozenset(
         "collections",
         "hashlib",
         "importlib",
+        "inspect",
+        "shutil",
+        "tempfile",
     }
 )
 

@@ -6,23 +6,25 @@
 
 ---
 
-## ⚠️ 当前状态：M0 骨架期（2026-10-17）
+## ⚠️ 当前状态：M1 已交付（2026-10-17）
 
-**这不是一个完成品。** 骨架已可安装、可运行、门禁齐备，但检测能力尚未落地：
+**这不是一个完成品。** 骨架可安装、`scan` 已交付、合成冲突矩阵已入仓可审计；但**意图提取、检测、报告与基准评分尚未落地**：
 
 | 命令 | 状态 | 计划里程碑 |
 |---|---|---|
+| `radar scan` | ✅ 已交付 | M1 |
 | `radar config` | ✅ 已交付 | M0 |
 | `radar selftest` | ✅ 已交付 | M0 |
-| `radar scan` | ⬜ 未交付（exit 4 显式拦截） | M1 |
-| `radar intent` | ⬜ 未交付（exit 4） | M2 |
+| `radar intent` | ⬜ 未交付（exit 4 显式拦截） | M2 |
 | `radar detect` | ⬜ 未交付（exit 4） | M3 |
 | `radar report` | ⬜ 未交付（exit 4） | M4 |
 | `radar bench` | ⬜ 未交付（exit 4） | M5 |
 
 未交付的命令**显式报错并退出码 4**，**不会**返回空结果冒充"没有冲突"——把"没检查过"读成"没问题"，对判定类工具是最严重的失真。
 
-进度与逐棒 DoD 见 [`plan/06-里程碑.md`](plan/06-里程碑.md)；下一棒交接见 [`plan/HANDOFF-M1.md`](plan/HANDOFF-M1.md)。
+**`radar scan` 的退出码语义**：成功**恒为 0**；`undetermined`（未识别的会话形态、无消息行的文件等）只作为提示出现在产物里，**不改退出码**——它是"我们没看懂"，不是"有冲突"。真正的环境问题（`--repo` 不在 git 仓库内、显式指定的会话根不存在）才给 exit 3，且不吐任何产物。
+
+进度与逐棒 DoD 见 [`plan/06-里程碑.md`](plan/06-里程碑.md)；下一棒交接见 [`plan/HANDOFF-M2.md`](plan/HANDOFF-M2.md)。
 
 ---
 
@@ -56,18 +58,25 @@ radar bench --only same_symbol_diff_lines      # 只跑指定场景
 radar bench --bench-dir bench --out-dir out    # 显式指定矩阵目录与产物目录
 ```
 
-### 本机只读演示（M1/M3 交付后）
+### 真实数据的只读演示（`scan` 已交付；其余待 M2–M4）
 
 ```bash
 # 工作区与会话发现（会话根默认按常见位置探测；也可显式传）
 radar scan --repo .
-radar scan --repo . --claude-root <你的会话根> --codex-root <你的会话根>
+
+# 显式指定双 harness 的会话根（推荐：控制扫描面，避免顺手读进无关目录）
+radar scan --repo . --claude-root <你的 Claude 会话根> --codex-root <你的 Codex 会话根>
+
+# 落盘产物 + 固定参考时刻（确定性演示与基准必须显式传 --now）
+radar scan --repo . --out-dir out --now 2026-01-01T10:00:00Z
 
 # 意图 → 三级检测 → 报告
 radar intent --repo .
 radar detect --repo .
 radar report --repo . --out-dir out --format both
 ```
+
+`scan` 的输出（stdout，或 `--out-dir` 下的 `scan.json`）：工作区表、会话归集表（含 `derived_from` 去重）、活跃 cell 表、`undetermined` 独立分区与计数。**它不做任何冲突判定**——判定在 M3。
 
 > 真实本机数据只作**可行性演示与人工抽验**：本机实测（基准日 2026-10-17）309 对时间重叠会话、63 个独立会话、独立重叠 22 对，而**同文件重叠 0 对**——真实并行冲突样本几乎为零。因此检出能力**只能由合成矩阵断言**（见下方"诚实披露"）。
 
@@ -86,6 +95,31 @@ radar report --repo . --out-dir out --format both
 
 ---
 
+## 合成冲突矩阵（已入仓，M1）
+
+真实并行冲突样本几乎为零（见下方"诚实披露"），所以**检出能力只能由合成矩阵断言**。矩阵已随仓冻结在 `bench/`：
+
+| 路径 | 内容 |
+|---|---|
+| `bench/manifest.json` | 场景清单 + 覆盖度门槛（每类 ≥1 + 集合覆盖 + 显式 `missing_types`）+ 生成器版本 + 真值 sha256 台账 |
+| `bench/scenarios/<id>/repo/` | 合成仓库的**基线**源码（纯文本；`.git` 刻意不入仓，见下） |
+| `bench/scenarios/<id>/sessions/` | 合成会话日志（仿 Claude Code / Codex 的真实形态，`{{REPO_ROOT}}` 为占位符） |
+| `bench/scenarios/<id>/truth.json` | **植入真值**：只存输入与期望（几何 + `levels_expected`/`symbols_expected` + `objects_forbidden` 反向样例） |
+
+七条场景：`same_file_diff_symbol` / `same_symbol_diff_lines` / `whole_file_overwrite` / `subagent_derived` / `negative_no_overlap` / `threshold_exact` / `threshold_near_miss`（最后两条**成对**卡在相邻容差两侧）。
+
+三条值得写进 README 的纪律：
+
+* **真值可独立复算**：真值里没有 `observed_*` 字段；把检测引擎整个注释掉，光看 `repo/` 原文 + 几何 + `config/radar.toml` 也能把期望值重新算出来（`tests/test_bench_matrix.py` 就是这么验的）。
+* **阈值不在真值里复制**：涉及阈值处一律写成指向 `config` 的符号引用；`--check` 会**现场读 config 求值**——改了阈值而真值不动，当场变红。
+* **`.git` 不入冻结产物**：`.git` 内部字节随 zlib/git 版本漂，跨平台不可能逐字节重现。提交的可复现性改用更强的判据——`--check` 重新物化合成仓库并**复算提交 sha**（sha 只由内容与固定元数据决定）。
+
+矩阵生成器在包内（`python -m agent_conflict_radar.bench.gen`；`--out bench` 重建 / `--check` 两层自检 / `--materialize <id> --dest <dir>` 物化成真仓库）。CI 每次都会跑 `--check`。**注意**：`radar bench`（拿矩阵给引擎**评分**）属于 M5，尚未交付——现在能跑的是"矩阵本身可重建"。
+
+> 合成数据白名单（K11）：假项目名 `demo-radar-alpha`、假 session id `sess-radar-NNNN`、假用户名 `radar-user`、固定基准时间 `2026-01-01T00:00:00Z` 起的确定偏移。真实日志、真实路径、真实 session id **一律不入仓**（`tools`/`tests` 有零命中断言）。
+
+---
+
 ## 退出码语义
 
 | 码 | 语义 |
@@ -93,10 +127,11 @@ radar report --repo . --out-dir out --format both
 | `0` | 无冲突 |
 | `1` | 有冲突 |
 | `2` | 用法错误（未知子命令 / 缺必填参数 / 未知 `--format` / 路径不存在） |
-| `3` | 依赖或环境缺失（git 不可用 / 配置缺失或不可解析 / 会话源不存在） |
-| `4` | 阶段未就绪（**骨架期专用**，随模块落地逐项退役） |
+| `3` | 依赖或环境缺失（git 不可用 / 配置缺失或不可解析 / 会话源不存在 / `--repo` 不在 git 仓库内） |
+| `4` | 阶段未就绪（**骨架期专用**，随模块落地逐项退役；`scan` 已于 M1 退役） |
 
-> 退出码非 0 **不一定**是跑挂：`detect` 对存在冲突的仓库返回 `1` 是**既定语义**，不是故障。
+> 退出码非 0 **不一定**是跑挂：`detect` 对存在冲突的仓库返回 `1` 是**既定语义**，不是故障；
+> `scan` 采到 `undetermined` 仍是 `0`（见上文"当前状态"）。
 
 ---
 
@@ -170,9 +205,15 @@ radar report --repo . --out-dir out --format both
 python -m pytest -q                 # 全量测试
 python tools/verify_offline.py      # 离线冒烟（CI 与本地共用同一条通路）
 python tools/verify_offline.py --strict   # console script 缺失即失败（CI 用）
+python tools/verify_mutation.py     # 守门变异验证（新增/改写守门后必跑）
 ```
 
-CI：`.github/workflows/ci.yml`，四矩阵 `windows/ubuntu × Python 3.8/3.12`。
+合成矩阵的自检与重建：生成器在**包内**，不是 `radar` 子命令（所以不列进上面的"命令总表"，
+也不参与 README↔CLI 指令面对账）——`python -m agent_conflict_radar.bench.gen --check` 做两层自检
+（CI 每棒必跑），`python -m agent_conflict_radar.bench.gen --out bench` 在改生成器/体例后整目录重建，
+`--materialize <id> --dest <dir>` 把某条场景物化成真 git 仓库（供 M2/M3 用）。
+
+CI：`.github/workflows/ci.yml`，四矩阵 `windows/ubuntu × Python 3.8/3.12`（每腿依次跑全量测试 → 矩阵自检 → 离线冒烟）。
 
 **计划文档**（读完 README 想知道"为什么这么设计"就看这里）：
 

@@ -165,10 +165,14 @@ def _flags_of(command):
     return set()
 
 
-def test_config_is_not_staged_anymore():
-    """K1 退役纪律：已交付的命令不得残留在阶段未就绪表里（幽灵语义）。"""
-    assert "config" not in stages.STAGE_NOT_READY
-    assert "selftest" not in stages.STAGE_NOT_READY
+def test_delivered_commands_are_not_staged_anymore():
+    """K1 退役纪律：**每一条**已交付命令都不得残留在阶段未就绪表里（幽灵语义）。
+
+    判据写成"对 DELIVERED_COMMANDS 逐条断言"，而不是挑几个命令名硬编码：
+    下一棒把 `intent` 挪过来时，这条断言自动覆盖它，不需要有人记得回来加一行。
+    """
+    for command in stages.DELIVERED_COMMANDS:
+        assert command not in stages.STAGE_NOT_READY, "%r 已交付却仍留在阶段未就绪表里" % command
 
 
 # --------------------------------------------------------------------------------------
@@ -207,7 +211,8 @@ def test_selftest_detects_stage_table_overlap(run_cli, monkeypatch):
     """阶段表自相矛盾（同一命令既已交付又未就绪）→ 自检必须变红。"""
     from agent_conflict_radar import cli
 
-    monkeypatch.setattr(cli.stages, "DELIVERED_COMMANDS", ("config", "selftest", "scan"))
+    # 挑一个**仍在** STAGE_NOT_READY 里的命令来制造重叠（scan 已于 M1 交付，不能再拿来用）。
+    monkeypatch.setattr(cli.stages, "DELIVERED_COMMANDS", ("config", "selftest", "intent"))
     code, _out, err = run_cli(["selftest"])
     assert code == 1
     assert "阶段表" in err
@@ -231,14 +236,21 @@ def test_module_entrypoint_in_subprocess(repo_root):
 
 
 @pytest.mark.skipif(shutil.which("radar") is None, reason="console script 未安装（README 快速开始可装）")
-def test_console_script_in_subprocess(repo_root, tmp_path):
+def test_console_script_runs_scan_for_real(repo_root, tmp_path):
+    """裸 console script 通路真跑一次 `scan`。
+
+    这里原本断言的是"未交付 → exit 4"；`scan` 于 M1 交付后，**同一批断言必须同步退役**
+    （K15 第②步）。新的判据是"命令真的执行到了环境校验"：给一个**不是 git 仓库**的目录，
+    必须 exit 3 且不吐产物——比"exit 4"更强（它证明命令已经接线、且不伪造空结果）。
+    """
     completed = subprocess.run(
         ["radar", "scan", "--repo", str(tmp_path)],
         cwd=str(repo_root),
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
-    assert completed.returncode == EXIT_NOT_READY
+    assert completed.returncode == EXIT_ENVIRONMENT
+    assert "git" in completed.stdout.decode("utf-8", errors="replace")
 
 
 def test_main_never_raises_systemexit(run_cli):

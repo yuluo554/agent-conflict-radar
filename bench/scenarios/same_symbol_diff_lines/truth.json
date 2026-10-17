@@ -1,0 +1,115 @@
+{
+  "geometry": {
+    "coord": "1-based 闭区间行号（相对 repo/ 根）；changed = 有效改动区间（与基线逐行比对得出）",
+    "pair": {
+      "derived_same_parent": false,
+      "gap_lines": 6,
+      "gap_rule": {
+        "lhs": "gap_lines",
+        "op": "ge",
+        "rhs": {
+          "const": 4
+        }
+      },
+      "overlap_lines": 0,
+      "same_file": true,
+      "symbol_relation": "same"
+    },
+    "recompute": "把检测引擎注释掉也能算出期望：读 repo/ 原文用 ast 取符号区间 → 两个 changed 区间是否同符号、间距是否 <= config:symbol.adjacent_tolerance → block 级看 git_expected_merge_exit → 若 pair.derived_same_parent 为真则整对不出记录。",
+    "sides": [
+      {
+        "changed": [
+          2,
+          2
+        ],
+        "kind": "edit",
+        "path": "src/alpha.py",
+        "session": "sess-radar-0003",
+        "symbol": "f"
+      },
+      {
+        "changed": [
+          9,
+          9
+        ],
+        "kind": "edit",
+        "path": "src/alpha.py",
+        "session": "sess-radar-0004",
+        "symbol": "f"
+      }
+    ],
+    "symbols": {
+      "src/alpha.py": {
+        "f": [
+          1,
+          10
+        ],
+        "g": [
+          14,
+          19
+        ]
+      }
+    }
+  },
+  "git_expected_merge_exit": 0,
+  "levels_expected": [
+    "file",
+    "symbol"
+  ],
+  "levels_forbidden": [
+    "block"
+  ],
+  "notes": "同一函数 f() 的首段与尾段（相隔 6 行）：git 自动合并成功（exit 0）——**这正是符号级的价值窗口**：git 说没问题，我们报同一符号。",
+  "objects_expected": [
+    {
+      "path": "src/alpha.py",
+      "symbol": "f"
+    }
+  ],
+  "objects_forbidden": [
+    {
+      "path": "src/alpha.py",
+      "symbol": "g"
+    },
+    {
+      "path": "src/filler.py",
+      "symbol": "noise_0"
+    }
+  ],
+  "reason": "same_symbol",
+  "repo_paths": {
+    "placeholder_root": "{{REPO_ROOT}}",
+    "repo": "scenarios/same_symbol_diff_lines/repo",
+    "session_roots": [
+      "claude"
+    ],
+    "sessions": "scenarios/same_symbol_diff_lines/sessions"
+  },
+  "repo_shas": {
+    "base_commit": "aef9be376c63886a520bc396a77a8cd496280793",
+    "branches": {
+      "feat/agent-a": "c53076beaeecb6dd676b66a420e87845eea78eef",
+      "feat/agent-b": "fd324de9b28508ad66baa4db7b1b8d7f8dcc1090"
+    }
+  },
+  "scenario": "same_symbol_diff_lines",
+  "sessions": [
+    "sess-radar-0003",
+    "sess-radar-0004"
+  ],
+  "symbols_expected": [
+    "f"
+  ],
+  "symbols_forbidden": [
+    "g",
+    "noise_0"
+  ],
+  "thresholds_ref": {
+    "adjacent_tolerance": "config:symbol.adjacent_tolerance",
+    "min_overlap_lines": "config:symbol.min_overlap_lines",
+    "note": "阈值一律**引用** config，不在真值里复制数值（K3：禁第二份数值表）。"
+  },
+  "types": [
+    "same_symbol_diff_lines"
+  ]
+}

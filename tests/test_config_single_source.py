@@ -248,3 +248,45 @@ def test_config_error_exit_code_is_environment():
 
     assert ConfigError.exit_code == EXIT_ENVIRONMENT
     assert TomlUnsupportedError.exit_code == EXIT_ENVIRONMENT
+
+
+# --------------------------------------------------------------------------------------
+# 只读覆盖（`Config.with_override`）：CLI 的 `--window` 走这条，配置文件仍是唯一权威
+# --------------------------------------------------------------------------------------
+
+
+def test_with_override_returns_a_new_view_and_leaves_the_original_alone(config_path):
+    cfg = load(str(config_path))
+    original = cfg.get("window", "scan_days")
+    narrowed = cfg.with_override("window", "scan_days", original + 1)
+    assert narrowed.get("window", "scan_days") == original + 1
+    assert cfg.get("window", "scan_days") == original, "覆盖必须返回新视图，不得就地改原对象"
+    assert narrowed.as_dict()["window"]["scan_days"] == original + 1
+    assert str(narrowed.source_path) == str(cfg.source_path), "来源路径要跟着新视图一起带过去（可核验）"
+
+
+def test_with_override_does_not_touch_the_config_file(config_path, tmp_path):
+    """覆盖只在内存里：写盘就会让 `config/radar.toml` 出现第二处真相（K3）。"""
+    before = config_path.read_bytes()
+    cfg = load(str(config_path))
+    cfg.with_override("window", "active_minutes", 5)
+    assert config_path.read_bytes() == before
+
+
+def test_with_override_rejects_unknown_keys_and_wrong_types(config_path):
+    cfg = load(str(config_path))
+    for section, key, value in (
+        ("nope", "scan_days", 1),
+        ("scan", "nope", 1),
+        ("scan", "max_line_bytes", "not-an-int"),
+        ("git", "merge_tree_enabled", 1),
+    ):
+        with pytest.raises(ConfigError):
+            cfg.with_override(section, key, value)
+
+
+def test_with_override_rejects_none_so_callers_must_not_pass_it():
+    """`None` 必须报错：调用方该做的是"不调用覆盖"，而不是传 None 混过去。"""
+    cfg = load()
+    with pytest.raises(ConfigError):
+        cfg.with_override("window", "scan_days", None)

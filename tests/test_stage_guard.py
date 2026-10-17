@@ -8,6 +8,7 @@ SKILL 的原文教训：CI 里那条断言，写下来时是"当时里程碑的�
 
 import argparse
 import importlib.util
+import shutil
 import sys
 from pathlib import Path
 
@@ -60,35 +61,58 @@ def test_command_order_covers_all_commands():
     assert set(stages.COMMAND_ORDER) == set(stages.all_commands())
 
 
-@pytest.mark.parametrize("command", sorted(stages.STAGE_NOT_READY))
-def test_smoke_tool_covers_every_staged_command(repo_root, command):
-    """冒烟脚本必须真跑到每条阶段未就绪命令（不只是"表里有"）。"""
-    tool = _load_smoke_tool(Path(repo_root))
-    import tempfile
+@pytest.fixture(scope="module")
+def smoke(repo_root, tmp_path_factory):
+    """冒烟脚本 + 它构造好的用例表（**模块级共用一份**）。
 
-    cases = tool.build_cases(tempfile.mkdtemp(prefix="radar-stage-"))
+    `build_cases` 现在会**物化一个真 git 仓库**当 `scan` 的夹具（不再只是一个空目录），
+    所以：① 缺 git 时显式跳过并说明；② 不能在每个用例里各建一次（慢，且两次物化会互相删目录）。
+    """
+    if shutil.which("git") is None:
+        pytest.skip("冒烟的合成夹具要物化 git 仓库：本机没有 git（缺依赖不是通过）")
+    tool = _load_smoke_tool(Path(repo_root))
+    work = str(tmp_path_factory.mktemp("radar-stage-"))
+    return tool, tool.build_cases(work), tool.console_script_cases(work)
+
+
+@pytest.mark.parametrize("command", sorted(stages.STAGE_NOT_READY))
+def test_smoke_tool_covers_every_staged_command(smoke, command):
+    """冒烟脚本必须真跑到每条阶段未就绪命令（不只是"表里有"）。"""
+    _tool, cases, _console = smoke
     covered = {case.command for case in cases}
     assert command in covered, "冒烟未覆盖命令 %r；已覆盖：%s" % (command, sorted(covered))
 
 
-def test_smoke_tool_coverage_audit_is_self_consistent(repo_root):
-    """冒烟脚本自带的覆盖自检必须返回空（它就是"并排数一遍"的那条命令）。"""
-    tool = _load_smoke_tool(Path(repo_root))
-    import tempfile
+def test_smoke_tool_covers_every_delivered_command(smoke):
+    """已交付命令同样要逐条真跑——漏掉一条，"它真的能跑"就没人证。"""
+    _tool, cases, console = smoke
+    covered = {case.command for case in list(cases) + list(console)}
+    missing = sorted(set(stages.DELIVERED_COMMANDS) - covered)
+    assert missing == [], "已交付命令在冒烟里没有用例：%s" % missing
 
-    assert tool.audit_command_coverage(tempfile.mkdtemp(prefix="radar-stage-")) == []
+
+def test_smoke_tool_coverage_audit_is_self_consistent_and_falsifiable(smoke):
+    """覆盖自检必须返回空，**且**在真的漏掉一条时变红。
+
+    首版这条审计写成了 `DELIVERED | STAGE_NOT_READY == all_commands()`——两侧本就是同一个
+    并集，恒真，等于没审。这里补上"抽掉一条用例 → 必须报出来"，把空转的可能堵死。
+    """
+    tool, cases, console = smoke
+    assert tool.audit_command_coverage(cases, console) == []
+    # 两条通路都要抽掉：只抽一条时另一条仍覆盖着 scan，审计**不该**报（那才是正确行为）。
+    broken = [case for case in cases if case.command != "scan"]
+    broken_console = [case for case in console if case.command != "scan"]
+    assert len(broken) < len(cases) and len(broken_console) < len(console), "夹具里没有 scan 用例"
+    assert any("scan" in item for item in tool.audit_command_coverage(broken, broken_console))
 
 
-def test_smoke_tool_expected_codes_track_stage_table(repo_root):
+def test_smoke_tool_expected_codes_track_stage_table(smoke):
     """冒烟里对阶段未就绪命令的期望值必须是 `EXIT_NOT_READY`。
 
     这条是"断言过期"的守门：某条命令交付时，若只改了 `stages` 而没改冒烟期望值，
     这里会先红——而不是等 CI 四腿同点全红。
     """
-    tool = _load_smoke_tool(Path(repo_root))
-    import tempfile
-
-    cases = tool.build_cases(tempfile.mkdtemp(prefix="radar-stage-"))
+    _tool, cases, _console = smoke
     # 只挑"验阶段未就绪契约"的用例：用法错误用例（如 `report --format pdf` → 2）属另一条判据，
     # 把它们一起断言进来就是"断言张冠李戴"（会同时断言了所有判据）。
     staged_case_codes = {}
@@ -103,11 +127,8 @@ def test_smoke_tool_expected_codes_track_stage_table(repo_root):
         )
 
 
-def test_delivered_commands_have_zero_expectation(repo_root):
-    tool = _load_smoke_tool(Path(repo_root))
-    import tempfile
-
-    cases = tool.build_cases(tempfile.mkdtemp(prefix="radar-stage-"))
+def test_delivered_commands_have_zero_expectation(smoke):
+    _tool, cases, _console = smoke
     for case in cases:
         if case.command in stages.DELIVERED_COMMANDS and case.name.startswith("module:") and "阶段未就绪" not in case.name:
             assert case.expected in (EXIT_OK, 1), (
@@ -116,12 +137,9 @@ def test_delivered_commands_have_zero_expectation(repo_root):
             )
 
 
-def test_console_script_cases_cover_all_commands(repo_root):
+def test_console_script_cases_cover_all_commands(smoke):
     """裸 console script 通路也必须逐条覆盖（`python -m` 与裸命令是两条通路）。"""
-    tool = _load_smoke_tool(Path(repo_root))
-    import tempfile
-
-    cases = tool.console_script_cases(tempfile.mkdtemp(prefix="radar-stage-"))
-    covered = {case.command for case in cases}
+    _tool, _cases, console = smoke
+    covered = {case.command for case in console}
     missing = sorted(set(stages.all_commands()) - covered)
     assert missing == [], "console script 通路未覆盖：%s" % missing

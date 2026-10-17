@@ -3,7 +3,7 @@
 为什么要有这个脚本（而不是把 shell 塞进 workflow）：内联 heredoc 受缩进与行尾影响易碎，
 落成 `tools/` 脚本可本地逐条复跑、可被测试引用；CI 步骤只调它一条命令。
 
-覆盖三件事：
+覆盖四件事：
 
 1. **退出码契约**（K1）：每条已交付命令 + 每条阶段未就绪命令 + 用法错误 + 依赖缺失。
    ⚠️ 纪律（K15）：某条命令交付时，**同一次提交里**改 `stages.py` 把它的名字挪到已交付集合，
@@ -12,9 +12,14 @@
 2. **两条调用通路**：`python -m agent_conflict_radar` 与裸 `radar`（`sys.path` 来源不同，
    只跑前者会漏掉"我们的包没进安装面"这类缺陷）。
 3. **零网络导入面审计**：源码里不得出现网络类标准库/第三方库的导入。
+4. **合成矩阵的生成器自检**（K10）：`--check` 两层断言 + 提交 sha 复算（这是"矩阵可重建"的门）。
 
 判定只看**退出码**（不看输出文本）：不同平台的输出编码不同（cp1252 / cp936 / utf-8），
 把文本写进断言会让冒烟变成"环境差异探测器"而不是"契约探测器"。
+
+**夹具纪律**（`plan/05` §七）：凡是"自动发现本机数据"的参数，冒烟一律显式传临时目录——
+`scan` 的两条用例都显式给 `--claude-root` / `--codex-root`，否则缺省探测会真的去读用户
+本机日志（本机实测过：漏传一侧即读进 125 个真实会话文件）。
 """
 
 import argparse
@@ -139,6 +144,42 @@ def _module_argv(*args: str) -> List[str]:
     return [sys.executable, "-m", "agent_conflict_radar"] + list(args)
 
 
+#: 夹具缓存：`build_cases` 与 `console_script_cases` 共用同一份（否则会重复物化并互相删目录）。
+_SCAN_FIXTURES: dict = {}
+
+
+def _scan_fixture(scratch: str) -> Tuple[str, str, str]:
+    """造一份 `scan` 的合成夹具：真 git 仓库 + 两个会话根（含合成日志）。
+
+    用生成器物化（`agent_conflict_radar.bench.gen`）而不是手写夹具：手写的会与
+    冻结矩阵各自演化，冒烟就成了"验一个不存在的场景"。这条同时把"生成器产出能被生产侧
+    解析"这条链路在 CI 里真跑一遍。
+    """
+    import agent_conflict_radar.bench.gen as bench_gen
+
+    if scratch in _SCAN_FIXTURES:
+        return _SCAN_FIXTURES[scratch]
+    scenario = bench_gen.scenario_by_id("negative_no_overlap")
+    dest = os.path.join(scratch, "scan-fixture")
+    bench_gen.materialize_scenario(scenario, dest)
+    _SCAN_FIXTURES[scratch] = (
+        os.path.join(dest, "repo"),
+        os.path.join(dest, "sessions", "claude"),
+        os.path.join(dest, "sessions", "codex"),
+    )
+    return _SCAN_FIXTURES[scratch]
+
+
+def _scan_argv(fixture, *prefix):
+    repo, claude_root, codex_root = fixture
+    return list(prefix) + [
+        "scan", "--repo", repo,
+        "--claude-root", claude_root,
+        "--codex-root", codex_root,
+        "--now", "2026-01-01T00:10:00Z",
+    ]
+
+
 def build_cases(repo_dir: str) -> List[Case]:
     cases = []
 
@@ -155,6 +196,30 @@ def build_cases(repo_dir: str) -> List[Case]:
         )
     )
     cases.append(Case("module:selftest", _module_argv("selftest"), EXIT_OK, cwd=repo_dir, command="selftest"))
+
+    # ---- 已交付：scan（M1；合成夹具，显式传两侧 root + --now）----
+    fixture = _scan_fixture(repo_dir)
+    cases.append(
+        Case(
+            "module:scan(合成夹具)",
+            _scan_argv(fixture, *_module_argv()),
+            EXIT_OK,
+            cwd=repo_dir,
+            command="scan",
+            note="成功恒为 0（undetermined 只提示不改码）；夹具用生成器物化，两条通路同一份",
+        )
+    )
+    cases.append(
+        Case(
+            "env:scan 会话源缺失",
+            _module_argv("scan", "--repo", fixture[0], "--claude-root", os.path.join(repo_dir, "no-such-root"),
+                         "--codex-root", fixture[2], "--now", "2026-01-01T00:10:00Z"),
+            EXIT_ENVIRONMENT,
+            cwd=repo_dir,
+            command="scan",
+            note="显式指定的会话根不存在 → exit 3，不得退化成 exit 0 空结果",
+        )
+    )
 
     # ---- 阶段未就绪命令（当前契约：exit 4）----
     for command in sorted(stages.STAGE_NOT_READY):
@@ -230,10 +295,12 @@ def build_cases(repo_dir: str) -> List[Case]:
 
 def console_script_cases(repo_dir: str) -> List[Case]:
     """裸 console script 通路（`radar …`）。只在已安装时有意义。"""
+    fixture = _scan_fixture(repo_dir)
     cases = [
         Case("console:--version", ["radar", "--version"], EXIT_OK, cwd=repo_dir, command="--version"),
         Case("console:config", ["radar", "config"], EXIT_OK, cwd=repo_dir, command="config"),
         Case("console:selftest", ["radar", "selftest"], EXIT_OK, cwd=repo_dir, command="selftest"),
+        Case("console:scan(合成夹具)", _scan_argv(fixture, "radar"), EXIT_OK, cwd=repo_dir, command="scan"),
     ]
     for command in sorted(stages.STAGE_NOT_READY):
         argv = ["radar", command] + _repo_flag_if_supported(command, repo_dir)
@@ -276,17 +343,20 @@ def audit_zero_network() -> List[str]:
     return failures
 
 
-def audit_command_coverage(repo_dir: str) -> List[str]:
-    """命令覆盖自检：冒烟覆盖的命令集合必须等于 stages 里的命令集合（并排数一遍）。"""
-    covered = set(stages.DELIVERED_COMMANDS) | set(stages.STAGE_NOT_READY)
-    expected = set(stages.all_commands())
-    missing = sorted(expected - covered)
-    extra = sorted(covered - expected)
+def audit_command_coverage(cases: Sequence[Case], console_cases: Sequence[Case]) -> List[str]:
+    """命令覆盖自检：每条命令都必须有**真跑它的用例**（并排数一遍）。
+
+    ⚠️ 这条审计的判据不能写成 `DELIVERED | STAGE_NOT_READY == all_commands()`——那两侧
+    本就是同一个并集，恒等式恒真，等于没审（首版就是这样，属"假门"）。真判据是
+    "用例表里有没有 `command == <某命令>` 的条目"，它会在**漏掉用例**时真红。
+    """
+    covered = {case.command for case in list(cases) + list(console_cases)}
     failures = []
+    missing = sorted(set(stages.all_commands()) - covered)
     if missing:
-        failures.append("冒烟未覆盖命令：%s" % missing)
-    if extra:
-        failures.append("冒烟覆盖了 stages 里不存在的命令：%s" % extra)
+        failures.append("冒烟没有任何用例真跑这些命令：%s" % missing)
+    for command in sorted(covered - set(stages.all_commands()) - {"--version", "--none--", "--gen-check--"}):
+        failures.append("冒烟里有用例声明了 stages 里不存在的命令：%r" % command)
     return failures
 
 
@@ -304,8 +374,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     failures = []
     results = []
 
+    try:
+        cases = build_cases(temp_repo)
+        console_cases = console_script_cases(temp_repo)
+    except RuntimeError as exc:
+        print("== 夹具构造失败 ==")
+        print("   [FAIL] %s" % exc)
+        print("结论：FAIL")
+        return 1
+
     print("== 命令覆盖自检（并排数一遍）==")
-    coverage_failures = audit_command_coverage(temp_repo)
+    coverage_failures = audit_command_coverage(cases, console_cases)
     print("   已交付：%s" % ", ".join(stages.DELIVERED_COMMANDS))
     print("   阶段未就绪：%s" % ", ".join("%s(%s)" % (k, v) for k, v in sorted(stages.STAGE_NOT_READY.items())))
     for item in coverage_failures:
@@ -322,7 +401,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("   [PASS] 源码未导入任何网络模块")
 
     print("== 模块通路冒烟（python -m agent_conflict_radar）==")
-    for case in build_cases(temp_repo):
+    for case in cases:
         code, output = _run(case.argv, case.cwd, case.path_override)
         ok = code == case.expected
         results.append((case.name, code, case.expected, ok))
@@ -331,10 +410,27 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print("        输出片段：%s" % output.strip().replace("\n", " | ")[:300])
             failures.append("模块通路 %s：rc=%s expected=%s" % (case.name, code, case.expected))
 
+    print("== 合成矩阵生成器自检（K10：冻结产物形态 + 重生成逐字节 + 提交 sha 复算）==")
+    gen_case = Case(
+        "matrix:生成器 --check",
+        [sys.executable, "-m", "agent_conflict_radar.bench.gen", "--check"],
+        EXIT_OK,
+        cwd=REPO_ROOT,
+        command="--gen-check--",
+        note="不进 stages 命令表（它不是 radar 子命令），但同样在 CI 里真跑",
+    )
+    code, output = _run(gen_case.argv, gen_case.cwd)
+    ok = code == gen_case.expected
+    results.append((gen_case.name, code, gen_case.expected, ok))
+    print("   [%s] %-34s rc=%s expected=%s" % ("PASS" if ok else "FAIL", gen_case.name, code, gen_case.expected))
+    if not ok:
+        print("        输出片段：%s" % output.strip().replace("\n", " | ")[:500])
+        failures.append("生成器自检失败：rc=%s expected=%s" % (code, gen_case.expected))
+
     print("== console script 通路冒烟（裸 radar）==")
     radar_available = shutil.which("radar") is not None
     if radar_available:
-        for case in console_script_cases(temp_repo):
+        for case in console_cases:
             code, output = _run(case.argv, case.cwd, case.path_override)
             ok = code == case.expected
             results.append((case.name, code, case.expected, ok))

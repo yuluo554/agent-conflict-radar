@@ -1,0 +1,119 @@
+{
+  "geometry": {
+    "coord": "1-based 闭区间行号（相对 repo/ 根）；changed = 有效改动区间（与基线逐行比对得出）",
+    "pair": {
+      "derived_same_parent": false,
+      "gap_lines": 4,
+      "gap_rule": {
+        "lhs": "gap_lines",
+        "op": "eq",
+        "rhs": {
+          "config_ref": "config:symbol.adjacent_tolerance",
+          "offset": 1
+        }
+      },
+      "overlap_lines": 0,
+      "same_file": true,
+      "symbol_relation": "different"
+    },
+    "recompute": "把检测引擎注释掉也能算出期望：读 repo/ 原文用 ast 取符号区间 → 两个 changed 区间是否同符号、间距是否 <= config:symbol.adjacent_tolerance → block 级看 git_expected_merge_exit → 若 pair.derived_same_parent 为真则整对不出记录。",
+    "sides": [
+      {
+        "changed": [
+          10,
+          10
+        ],
+        "kind": "edit",
+        "path": "src/alpha.py",
+        "session": "sess-radar-0014",
+        "symbol": "f"
+      },
+      {
+        "changed": [
+          15,
+          15
+        ],
+        "kind": "edit",
+        "path": "src/alpha.py",
+        "session": "sess-radar-0015",
+        "symbol": "g"
+      }
+    ],
+    "symbols": {
+      "src/alpha.py": {
+        "f": [
+          1,
+          10
+        ],
+        "g": [
+          14,
+          19
+        ]
+      }
+    }
+  },
+  "git_expected_merge_exit": 0,
+  "levels_expected": [
+    "file"
+  ],
+  "levels_forbidden": [
+    "block",
+    "symbol"
+  ],
+  "notes": "与 `threshold_exact` 成对：间距 = 容差 + 1 → **不命中**相邻符号，只报文件级。没有这一条，阈值的下边界从未被测过（写错永远不红）。",
+  "objects_expected": [
+    {
+      "path": "src/alpha.py",
+      "symbol": null
+    }
+  ],
+  "objects_forbidden": [
+    {
+      "path": "src/alpha.py",
+      "symbol": "f"
+    },
+    {
+      "path": "src/alpha.py",
+      "symbol": "g"
+    },
+    {
+      "path": "src/filler.py",
+      "symbol": "noise_0"
+    }
+  ],
+  "reason": "adjacent_range_beyond_tolerance",
+  "repo_paths": {
+    "placeholder_root": "{{REPO_ROOT}}",
+    "repo": "scenarios/threshold_near_miss/repo",
+    "session_roots": [
+      "claude"
+    ],
+    "sessions": "scenarios/threshold_near_miss/sessions"
+  },
+  "repo_shas": {
+    "base_commit": "aef9be376c63886a520bc396a77a8cd496280793",
+    "branches": {
+      "feat/agent-a": "76126e30b03dd160a805294a8e58a74abcda6cdc",
+      "feat/agent-b": "0a80b2ac3996ae4ba75a6911de8ce8917851b34a"
+    }
+  },
+  "scenario": "threshold_near_miss",
+  "sessions": [
+    "sess-radar-0014",
+    "sess-radar-0015"
+  ],
+  "symbols_expected": [],
+  "symbols_forbidden": [
+    "f",
+    "g",
+    "noise_0"
+  ],
+  "thresholds_ref": {
+    "adjacent_tolerance": "config:symbol.adjacent_tolerance",
+    "min_overlap_lines": "config:symbol.min_overlap_lines",
+    "note": "阈值一律**引用** config，不在真值里复制数值（K3：禁第二份数值表）。"
+  },
+  "types": [
+    "threshold_adjacent"
+  ]
+}

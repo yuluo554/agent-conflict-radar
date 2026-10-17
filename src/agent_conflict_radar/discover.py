@@ -1,20 +1,14 @@
-"""M1 工作区与会话发现。
-
-> ⚠️ **M1 未完成状态（2026-10-17；按用户要求只交付 M0 后冻结本棒进度）**：本模块已写出、
-> 已在**合成夹具上跑通一次**（1 worktree / 2 会话 / 2 活跃 cell / 0 undetermined / 双跑逐字节一致，
-> 见 `plan/HANDOFF-M1.md` §五 进度快照），但**尚未接入 CLI、尚无测试文件、尚无离线冒烟**。
-> 因此 `radar scan` **仍在 `stages.STAGE_NOT_READY` 里**（exit 4 显式拦截）——
-> 按 K15 纪律，没有测试与冒烟的交付不算交付。**M1 DoD 达成前不得对外宣称 scan 已交付。**
+"""M1 工作区与会话发现（`radar scan` 的实现主体）。
 
 输入：`git worktree list --porcelain` + 双 harness 会话日志（Claude Code / Codex）。
 输出：`WorkspaceTable`（worktrees / sessions / active_cells / undetermined / counts）。
 
 三条硬纪律：
 
-1. **不伪造空结果**：源根目录不存在 → `EnvironmentError_`（exit 3）；找不到任何会话源 →
+1. **不伪造空结果**：`--repo` 不在 git 仓库内 → `EnvironmentError_`（exit 3）；会话根目录不存在 →
    也是 exit 3。绝不返回空表让调用方以为"没有冲突"。
 2. **未识别形态显式可见**：形状不符 → `undetermined` 条目（`unsupported_format` + 缺失键 +
-   点名文件）；会话文件没有消息行 → `missing_cwd`；父会话不在本机 → `parent_not_found`。
+   点名文件）；会话文件没有消息行 → `no_message_line`；父会话不在本机 → `parent_not_found`。
    这些一律**独立分区列出**，不计入 `sessions`。
 3. **确定性**：全程不读时钟（参考时刻由调用方显式传入或取"观测到的最大时间戳"）；
    遍历先排序；`seq` 是**源文件行号**而不是数组下标。
@@ -514,10 +508,13 @@ def resolve_root(raw: Optional[str], env_name: str, default_relative: str) -> Op
 
 def scan_sessions(
     roots: Sequence[Tuple[str, Path]],
-    cfg,
     max_line_bytes: int,
 ) -> Tuple[List[Session], List[Undetermined]]:
-    """扫描各源的会话根，返回 (sessions, undetermined)。`roots` 里不存在的路径直接报错。"""
+    """扫描各源的会话根，返回 (sessions, undetermined)。`roots` 里不存在的路径直接报错。
+
+    **显式传进来的根必须存在**（打错一个字母就 exit 3，不静默跳过）；而"按常见位置探测"
+    的缺省根不存在只是加一条 note——两种情况的性质不同，不该用同一套处理。
+    """
     sessions: List[Session] = []
     undetermined: List[Undetermined] = []
     for source, root in roots:
@@ -612,6 +609,16 @@ def build_workspace_table(
     max_line_bytes = cfg.get("scan", "max_line_bytes")
 
     notes: List[str] = []
+    # 先判"--repo 到底是不是 git 仓库"：worktree 枚举与无副作用试合并都依赖 git 元数据，
+    # 非 git 目录下继续跑只会得到"0 个工作区 + 若干会话"，读起来像"没有冲突"——那正是
+    # 判定类工具最严重的失真。故显式 exit 3（依赖或环境缺失），而不是退化成空结果。
+    probe = run_readonly(["rev-parse", "--show-toplevel"], cwd=repo, timeout=timeout)
+    if probe.returncode != 0:
+        raise EnvironmentError_(
+            "--repo 指向的路径不在 git 仓库内（%s）：worktree 枚举与 merge-tree 试合并都依赖 git。"
+            "请改用仓库路径，或用 `git init` 把它变成仓库。本工具不会伪造空结果。"
+            % (probe.stderr.strip() or probe.stdout.strip() or repo)
+        )
     worktrees, worktree_undetermined = list_worktrees(repo, timeout)
     undetermined: List[Undetermined] = list(worktree_undetermined)
     if not worktrees:
@@ -633,7 +640,7 @@ def build_workspace_table(
             "或设置 RADAR_CLAUDE_ROOT / RADAR_CODEX_ROOT。本工具不会伪造空结果。"
         )
 
-    sessions, session_undetermined = scan_sessions(roots, cfg, max_line_bytes)
+    sessions, session_undetermined = scan_sessions(roots, max_line_bytes)
     undetermined.extend(session_undetermined)
     link_derivations(sessions, undetermined)
 

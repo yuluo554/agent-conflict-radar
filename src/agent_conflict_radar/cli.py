@@ -23,6 +23,7 @@ from typing import List, Optional, Sequence
 
 from . import __version__
 from . import config as config_module
+from . import discover
 from . import gitio
 from . import serialize
 from . import stages
@@ -117,6 +118,12 @@ def build_parser() -> argparse.ArgumentParser:
         sub.add_argument("--claude-root", metavar="PATH", default=None, help="Claude Code 会话根目录")
         sub.add_argument("--codex-root", metavar="PATH", default=None, help="Codex 会话根目录")
         sub.add_argument("--out-dir", metavar="PATH", default=None, help="产物输出目录（默认：当前目录）")
+        sub.add_argument(
+            "--now",
+            metavar="ISO8601",
+            default=None,
+            help="活跃判定的参考时刻（缺省取观测到的最大会话时间戳）。确定性测试与基准必须显式传",
+        )
 
     scan = subparsers.add_parser("scan", help="M1：工作区与会话发现")
     add_repo_options(scan)
@@ -200,7 +207,49 @@ def _dispatch(args) -> int:
         return _cmd_config(cfg)
     if command == "selftest":
         return _cmd_selftest(cfg)
+    if command == "scan":
+        return _cmd_scan(cfg, args)
     raise UsageError("未知命令：%r" % command)  # pragma: no cover - 由 parser 兜住
+
+
+def _cmd_scan(cfg, args) -> int:
+    """`radar scan`：worktree + 双 harness 会话归集 → `WorkspaceTable`。
+
+    退出码语义（与 README 一致）：**成功恒为 0**；`undetermined` 只提示不改码——
+    未被识别的会话形态是"我们没看懂"，不是"有冲突"，把它映射成非 0 会让调用方
+    分不清"检出冲突"与"解析受限"。真正的环境问题（非 git 仓库 / 会话源不存在）走 exit 3。
+    """
+    window_days = getattr(args, "window", None)
+    if window_days is not None:
+        # 覆盖只作用于本次调用的内存视图：配置文件仍是唯一权威（K3），不写盘、不改原对象。
+        cfg = cfg.with_override("window", "scan_days", window_days)
+    table = discover.build_workspace_table(
+        args.repo_resolved,
+        getattr(args, "claude_root", None),
+        getattr(args, "codex_root", None),
+        cfg,
+        now=getattr(args, "now", None),
+    )
+    text = serialize.dumps_json(table.as_dict())
+    out_dir = getattr(args, "out_dir", None)
+    if out_dir:
+        target_dir = _resolve_out_dir(out_dir)
+        serialize.write_atomic(target_dir / "scan.json", text)
+    sys.stdout.write(text)
+    return EXIT_OK
+
+
+def _resolve_out_dir(raw: str):
+    """把 `--out-dir` 解析成可写目录：不存在就建；存在但不是目录 → 用法错误（exit 2）。"""
+    from .paths import normalize_path
+
+    target = normalize_path(raw)
+    if target.is_dir():
+        return target
+    if target.exists():
+        raise UsageError("--out-dir 指向的不是目录：%s" % target)
+    target.mkdir(parents=True, exist_ok=True)
+    return target
 
 
 def _cmd_config(cfg) -> int:

@@ -12,7 +12,10 @@
 
 用法：
     python tools/verify_mutation.py            # 跑全部变异组
-    python tools/verify_mutation.py --only M3
+    python tools/verify_mutation.py --only M3  # 单跑（改完守门先单跑省时间）
+
+⚠️ M11/M12 会**临时改冻结产物与配置**（都在 `finally` 里按字节还原）：这是有意的——
+"改了阈值/台账而守门不红"正是最该被抓到的形态。
 """
 
 import argparse
@@ -64,10 +67,10 @@ MUTATIONS: List[Mutation] = [
     Mutation(
         "M4",
         "src/agent_conflict_radar/stages.py",
-        'DELIVERED_COMMANDS = (\n    "config",\n    "selftest",\n)',
-        'DELIVERED_COMMANDS = (\n    "config",\n    "selftest",\n    "scan",\n)',
+        'STAGE_NOT_READY = {\n    "intent": "M2",',
+        'STAGE_NOT_READY = {\n    "scan": "M1",\n    "intent": "M2",',
         "tests/test_stage_guard.py::test_no_command_is_unclassified",
-        "同一命令同时出现在已交付与未就绪表 → 阶段守卫必须变红",
+        "把**已退役**的 scan 又塞回阶段未就绪表（幽灵语义复活）→ 阶段守卫必须变红",
     ),
     Mutation(
         "M5",
@@ -121,6 +124,55 @@ MUTATIONS: List[Mutation] = [
         "            pass  # 变异：不再重配编码",
         "tests/test_encoding_guard.py::test_cp1252_stream_is_reconfigured_to_utf8",
         "编码守卫失效 → cp1252 复现门禁必须变红",
+    ),
+    Mutation(
+        "M11",
+        "bench/scenarios/threshold_exact/truth.json",
+        '"gap_lines": 3,',
+        '"gap_lines": 4,',
+        "tests/test_bench_matrix.py::test_generator_check_passes_on_the_frozen_tree",
+        "冻结真值被手改（间距脱离阈值边界）→ 生成器 --check 必须变红："
+        "这条直接打「台账禁手改」与「重生成逐字节比对」两层",
+    ),
+    Mutation(
+        "M12",
+        "config/radar.toml",
+        "adjacent_tolerance = 3",
+        "adjacent_tolerance = 9",
+        "tests/test_bench_matrix.py::test_generator_check_passes_on_the_frozen_tree",
+        "改阈值而真值不动 → --check 的 gap_rule 现场求值必须变红（6a/6b 的期望建立在边界上）",
+    ),
+    Mutation(
+        "M13",
+        "src/agent_conflict_radar/discover.py",
+        "seq=message_line_no,",
+        "seq=1,",
+        "tests/test_discover.py::test_claude_first_line_is_not_message_line_and_seq_is_source_line_number",
+        "seq 退化成「数组下标/首行」→ 行号可复算这条判据必须变红（Claude 首行不是消息行）",
+    ),
+    Mutation(
+        "M14",
+        "tools/verify_offline.py",
+        "    covered = {case.command for case in list(cases) + list(console_cases)}",
+        "    covered = set(stages.all_commands())  # 变异：退回恒真判据",
+        "tests/test_stage_guard.py::test_smoke_tool_coverage_audit_is_self_consistent_and_falsifiable",
+        "覆盖自检退回「恒真」（两侧本就是同一并集）→ 可证伪性断言必须变红",
+    ),
+    Mutation(
+        "M15",
+        "src/agent_conflict_radar/bench/gen.py",
+        '        if key_path.startswith("observed"):',
+        "        if False:  # 变异：不再拦 observed_*",
+        "tests/test_bench_matrix.py::test_check_actually_detects_a_tampered_truth",
+        "真值里的 observed_* 不再被拦 → 那条「往真值里加一个观测字段」的探针必须变红（K9）",
+    ),
+    Mutation(
+        "M16",
+        "src/agent_conflict_radar/bench/gen.py",
+        "    text = json.dumps(payload, sort_keys=True, ensure_ascii=False, indent=2)",
+        "    text = json.dumps(payload, sort_keys=True, ensure_ascii=False, indent=4)",
+        "tests/test_bench_matrix.py::test_generator_serializer_is_an_independent_implementation_with_identical_bytes",
+        "生成侧序列化参数与生产侧漂移 → 逐字节一致性断言必须变红（K10）",
     ),
 ]
 

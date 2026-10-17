@@ -25,6 +25,13 @@ STRUCTURAL_NUMBERS = (0, 1)
 EXEMPT_FILES = {
     "config.py": "配置解析器实现：其中的数字是语法/实现常量（如偏移量），不是策略阈值；策略值一律来自被解析的文件",
     "exit_codes.py": "退出码定义位：0–4 是契约本体，定义就在这里（K1）",
+    "bench/rng.py": "确定性 RNG 的算法常量（splitmix64 的黄金比例增量、两个混淆乘子、位移量、64 位掩码）：是算法本体，不是策略阈值",
+    "bench/gen.py": (
+        "合成场景生成器：其中的数字是**构造几何**（改动行号 2/9/10/14/15/19、符号区间、会话偏移分钟、"
+        "覆盖度最低条数、sha 位数）——是「输入数据」本身，不是判定阈值。判定阈值一律经 "
+        "`thresholds_ref` / `gap_rule` 引用 config，且 `--check` 会读 config 现场求值"
+        "（改阈值而真值不动 → 变红）。豁免理由与兜底守门一并写在这里，供复核"
+    ),
 }
 
 #: 逐值豁免：(相对包根的 posix 路径, 数值) -> 理由
@@ -40,6 +47,7 @@ REQUIRED_MODULES = (
     "__main__.py",
     "cli.py",
     "config.py",
+    "discover.py",
     "errors.py",
     "exit_codes.py",
     "gitio.py",
@@ -47,6 +55,9 @@ REQUIRED_MODULES = (
     "serialize.py",
     "stages.py",
     "versions.py",
+    "bench/__init__.py",
+    "bench/gen.py",
+    "bench/rng.py",
 )
 
 

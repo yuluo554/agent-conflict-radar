@@ -1,0 +1,108 @@
+{
+  "geometry": {
+    "coord": "1-based 闭区间行号（相对 repo/ 根）；changed = 有效改动区间（与基线逐行比对得出）",
+    "pair": {
+      "derived_same_parent": true,
+      "gap_lines": 6,
+      "gap_rule": {
+        "lhs": "gap_lines",
+        "op": "ge",
+        "rhs": {
+          "const": 4
+        }
+      },
+      "overlap_lines": 0,
+      "same_file": true,
+      "symbol_relation": "same"
+    },
+    "recompute": "把检测引擎注释掉也能算出期望：读 repo/ 原文用 ast 取符号区间 → 两个 changed 区间是否同符号、间距是否 <= config:symbol.adjacent_tolerance → block 级看 git_expected_merge_exit → 若 pair.derived_same_parent 为真则整对不出记录。",
+    "sides": [
+      {
+        "changed": [
+          2,
+          2
+        ],
+        "kind": "edit",
+        "path": "src/alpha.py",
+        "session": "sess-radar-0008",
+        "symbol": "f"
+      },
+      {
+        "changed": [
+          9,
+          9
+        ],
+        "kind": "edit",
+        "path": "src/alpha.py",
+        "session": "sess-radar-0009",
+        "symbol": "f"
+      }
+    ],
+    "symbols": {
+      "src/alpha.py": {
+        "f": [
+          1,
+          10
+        ],
+        "g": [
+          14,
+          19
+        ]
+      }
+    }
+  },
+  "git_expected_merge_exit": 0,
+  "levels_expected": [],
+  "levels_forbidden": [
+    "file",
+    "block",
+    "symbol"
+  ],
+  "notes": "几何与场景 2 相同（同文件、同一函数、间距 6），但两侧是**同一 parent 派生的 subagent**→ 默认不构成跨 agent 并行，一条都不报。派生关系必须由 derived_from 认定（读 parent_thread_id），不是靠几何猜出来的。",
+  "objects_expected": [],
+  "objects_forbidden": [
+    {
+      "path": "src/alpha.py",
+      "symbol": "f"
+    },
+    {
+      "path": "src/filler.py",
+      "symbol": "noise_0"
+    }
+  ],
+  "reason": "same_parent_derived_no_cross_agent",
+  "repo_paths": {
+    "placeholder_root": "{{REPO_ROOT}}",
+    "repo": "scenarios/subagent_derived/repo",
+    "session_roots": [
+      "codex"
+    ],
+    "sessions": "scenarios/subagent_derived/sessions"
+  },
+  "repo_shas": {
+    "base_commit": "aef9be376c63886a520bc396a77a8cd496280793",
+    "branches": {
+      "feat/agent-a": "f5366b2c15862f471653af21117b86395f68bfbd",
+      "feat/agent-b": "003173a4e09d02a6edaa395005af5b0e6a8fa42e"
+    }
+  },
+  "scenario": "subagent_derived",
+  "sessions": [
+    "sess-radar-0007",
+    "sess-radar-0008",
+    "sess-radar-0009"
+  ],
+  "symbols_expected": [],
+  "symbols_forbidden": [
+    "f",
+    "noise_0"
+  ],
+  "thresholds_ref": {
+    "adjacent_tolerance": "config:symbol.adjacent_tolerance",
+    "min_overlap_lines": "config:symbol.min_overlap_lines",
+    "note": "阈值一律**引用** config，不在真值里复制数值（K3：禁第二份数值表）。"
+  },
+  "types": [
+    "subagent_derived"
+  ]
+}

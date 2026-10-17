@@ -1,0 +1,207 @@
+{
+  "coverage": {
+    "count_by_type": {
+      "negative_no_overlap": 1,
+      "same_file_diff_symbol": 1,
+      "same_symbol_diff_lines": 1,
+      "subagent_derived": 1,
+      "threshold_adjacent": 2,
+      "whole_file_overwrite": 1
+    },
+    "counting_unit": "用例条目数（一个 case 一条），不是命中记录数（K12 的口径声明）",
+    "min_count_by_type": {
+      "negative_no_overlap": 1,
+      "same_file_diff_symbol": 1,
+      "same_symbol_diff_lines": 1,
+      "subagent_derived": 1,
+      "threshold_adjacent": 1,
+      "whole_file_overwrite": 1
+    },
+    "missing_types": [],
+    "sampling_notice": "抽样覆盖非穷举：本矩阵声明的是「每类至少一条 + 集合覆盖」，不是穷举所有几何。",
+    "threshold_pair": {
+      "hit_case": "threshold_exact",
+      "miss_case": "threshold_near_miss",
+      "type": "threshold_adjacent"
+    }
+  },
+  "generator_version": "m1-1",
+  "scenarios": [
+    {
+      "cases": [
+        {
+          "case_id": "same_file_diff_symbol",
+          "truth_sha256": "9b3d25f6296a96efbf2799568de0a693114c590f951c084ac9c02be44c93b0e3"
+        }
+      ],
+      "id": "same_file_diff_symbol",
+      "reason": "different_symbol_not_adjacent",
+      "repo_shas": {
+        "base_commit": "aef9be376c63886a520bc396a77a8cd496280793",
+        "branches": {
+          "feat/agent-a": "0446011ea7e04dab4f58b2aa81b3e3105fc9bd5c",
+          "feat/agent-b": "17cd5e796d52b5f8283ff07b3d262b10e06ac131"
+        }
+      },
+      "sessions": [
+        "sess-radar-0001",
+        "sess-radar-0002"
+      ],
+      "truth_sha256": "9b3d25f6296a96efbf2799568de0a693114c590f951c084ac9c02be44c93b0e3",
+      "types": [
+        "same_file_diff_symbol"
+      ]
+    },
+    {
+      "cases": [
+        {
+          "case_id": "same_symbol_diff_lines",
+          "truth_sha256": "732409b68be6743b343d49628c0883f723e83ffa5d4b78b03b6a98a6fe43dcd6"
+        }
+      ],
+      "id": "same_symbol_diff_lines",
+      "reason": "same_symbol",
+      "repo_shas": {
+        "base_commit": "aef9be376c63886a520bc396a77a8cd496280793",
+        "branches": {
+          "feat/agent-a": "c53076beaeecb6dd676b66a420e87845eea78eef",
+          "feat/agent-b": "fd324de9b28508ad66baa4db7b1b8d7f8dcc1090"
+        }
+      },
+      "sessions": [
+        "sess-radar-0003",
+        "sess-radar-0004"
+      ],
+      "truth_sha256": "732409b68be6743b343d49628c0883f723e83ffa5d4b78b03b6a98a6fe43dcd6",
+      "types": [
+        "same_symbol_diff_lines"
+      ]
+    },
+    {
+      "cases": [
+        {
+          "case_id": "whole_file_overwrite",
+          "truth_sha256": "f7984f7dba31f6aeb865fe9429f7a6cec235281f724f07bc52498a3ff3b4ed0e"
+        }
+      ],
+      "id": "whole_file_overwrite",
+      "reason": "same_symbol_and_block_conflict",
+      "repo_shas": {
+        "base_commit": "aef9be376c63886a520bc396a77a8cd496280793",
+        "branches": {
+          "feat/agent-a": "6a6b852a433cf761ec3d538f54edb17531815180",
+          "feat/agent-b": "f9636e84c508c46bbc4b140302b1b89c0be292b1"
+        }
+      },
+      "sessions": [
+        "sess-radar-0005",
+        "sess-radar-0006"
+      ],
+      "truth_sha256": "f7984f7dba31f6aeb865fe9429f7a6cec235281f724f07bc52498a3ff3b4ed0e",
+      "types": [
+        "whole_file_overwrite"
+      ]
+    },
+    {
+      "cases": [
+        {
+          "case_id": "subagent_derived",
+          "truth_sha256": "ef50be79e5332e5ebfe16db921f921db42b5d3c3d99b8ff325023f8f02e6de7c"
+        }
+      ],
+      "id": "subagent_derived",
+      "reason": "same_parent_derived_no_cross_agent",
+      "repo_shas": {
+        "base_commit": "aef9be376c63886a520bc396a77a8cd496280793",
+        "branches": {
+          "feat/agent-a": "f5366b2c15862f471653af21117b86395f68bfbd",
+          "feat/agent-b": "003173a4e09d02a6edaa395005af5b0e6a8fa42e"
+        }
+      },
+      "sessions": [
+        "sess-radar-0007",
+        "sess-radar-0008",
+        "sess-radar-0009"
+      ],
+      "truth_sha256": "ef50be79e5332e5ebfe16db921f921db42b5d3c3d99b8ff325023f8f02e6de7c",
+      "types": [
+        "subagent_derived"
+      ]
+    },
+    {
+      "cases": [
+        {
+          "case_id": "negative_no_overlap",
+          "truth_sha256": "a389aa6d7e31f116de5e509329813fe37319916066d0c4a5c082296027c9f23f"
+        }
+      ],
+      "id": "negative_no_overlap",
+      "reason": "different_files",
+      "repo_shas": {
+        "base_commit": "aef9be376c63886a520bc396a77a8cd496280793",
+        "branches": {
+          "feat/agent-a": "fafc0256f3223248d78db9180c5872c3b8bac2e7",
+          "feat/agent-b": "dbe85c04e6d51ac43ac679ffbd413c94240099b1"
+        }
+      },
+      "sessions": [
+        "sess-radar-0010",
+        "sess-radar-0011"
+      ],
+      "truth_sha256": "a389aa6d7e31f116de5e509329813fe37319916066d0c4a5c082296027c9f23f",
+      "types": [
+        "negative_no_overlap"
+      ]
+    },
+    {
+      "cases": [
+        {
+          "case_id": "threshold_exact",
+          "truth_sha256": "05faf223828e4dea4516914e9ea82dd6242e3d916a24611da76e41ad07bfae37"
+        }
+      ],
+      "id": "threshold_exact",
+      "reason": "adjacent_range_within_tolerance",
+      "repo_shas": {
+        "base_commit": "aef9be376c63886a520bc396a77a8cd496280793",
+        "branches": {
+          "feat/agent-a": "b3ec3441aaa406f7ccf38a986a7ae0ffb4592408",
+          "feat/agent-b": "5579ce15e7761cea99fd609e6465126a3de72391"
+        }
+      },
+      "sessions": [
+        "sess-radar-0012",
+        "sess-radar-0013"
+      ],
+      "truth_sha256": "05faf223828e4dea4516914e9ea82dd6242e3d916a24611da76e41ad07bfae37",
+      "types": [
+        "threshold_adjacent"
+      ]
+    },
+    {
+      "cases": [
+        {
+          "case_id": "threshold_near_miss",
+          "truth_sha256": "0d07ecd73b59d81a9ce22d31c542d630a28e31ca11705559627553cd7ffba7d5"
+        }
+      ],
+      "id": "threshold_near_miss",
+      "reason": "adjacent_range_beyond_tolerance",
+      "repo_shas": {
+        "base_commit": "aef9be376c63886a520bc396a77a8cd496280793",
+        "branches": {
+          "feat/agent-a": "76126e30b03dd160a805294a8e58a74abcda6cdc",
+          "feat/agent-b": "0a80b2ac3996ae4ba75a6911de8ce8917851b34a"
+        }
+      },
+      "sessions": [
+        "sess-radar-0014",
+        "sess-radar-0015"
+      ],
+      "truth_sha256": "0d07ecd73b59d81a9ce22d31c542d630a28e31ca11705559627553cd7ffba7d5",
+      "types": [
+        "threshold_adjacent"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+{"payload":{"cli_version":"0.0.0-synthetic","cwd":"{{REPO_ROOT}}","id":"sess-radar-0007","originator":"codex_cli","session_id":"sess-radar-0007","thread_source":"user","timestamp":"2026-01-01T00:00:00Z"},"timestamp":"2026-01-01T00:00:00Z","type":"session_meta"}
+{"payload":{"type":"token_count"},"timestamp":"2026-01-01T00:01:00Z","type":"event_msg"}

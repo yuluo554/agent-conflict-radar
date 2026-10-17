@@ -1,0 +1,117 @@
+{
+  "geometry": {
+    "coord": "1-based 闭区间行号（相对 repo/ 根）；changed = 有效改动区间（与基线逐行比对得出）",
+    "pair": {
+      "derived_same_parent": false,
+      "gap_lines": null,
+      "gap_rule": null,
+      "overlap_lines": 0,
+      "same_file": false,
+      "symbol_relation": "cross_file"
+    },
+    "recompute": "把检测引擎注释掉也能算出期望：读 repo/ 原文用 ast 取符号区间 → 两个 changed 区间是否同符号、间距是否 <= config:symbol.adjacent_tolerance → block 级看 git_expected_merge_exit → 若 pair.derived_same_parent 为真则整对不出记录。",
+    "sides": [
+      {
+        "changed": [
+          2,
+          2
+        ],
+        "kind": "edit",
+        "path": "src/alpha.py",
+        "session": "sess-radar-0010",
+        "symbol": "f"
+      },
+      {
+        "changed": [
+          3,
+          3
+        ],
+        "kind": "edit",
+        "path": "src/beta.py",
+        "session": "sess-radar-0011",
+        "symbol": "main"
+      }
+    ],
+    "symbols": {
+      "src/alpha.py": {
+        "f": [
+          1,
+          10
+        ],
+        "g": [
+          14,
+          19
+        ]
+      },
+      "src/beta.py": {
+        "helper": [
+          7,
+          8
+        ],
+        "main": [
+          1,
+          4
+        ]
+      }
+    }
+  },
+  "git_expected_merge_exit": 0,
+  "levels_expected": [],
+  "levels_forbidden": [
+    "file",
+    "block",
+    "symbol"
+  ],
+  "notes": "两侧改完全不同的文件（alpha.py / beta.py）→ 空检出，这是防误报的主力用例；仓库里还有 rng 生成的 filler.py 噪声，检测器不得顺手报它。",
+  "objects_expected": [],
+  "objects_forbidden": [
+    {
+      "path": "src/alpha.py",
+      "symbol": "f"
+    },
+    {
+      "path": "src/beta.py",
+      "symbol": "main"
+    },
+    {
+      "path": "src/filler.py",
+      "symbol": "noise_0"
+    }
+  ],
+  "reason": "different_files",
+  "repo_paths": {
+    "placeholder_root": "{{REPO_ROOT}}",
+    "repo": "scenarios/negative_no_overlap/repo",
+    "session_roots": [
+      "claude",
+      "codex"
+    ],
+    "sessions": "scenarios/negative_no_overlap/sessions"
+  },
+  "repo_shas": {
+    "base_commit": "aef9be376c63886a520bc396a77a8cd496280793",
+    "branches": {
+      "feat/agent-a": "fafc0256f3223248d78db9180c5872c3b8bac2e7",
+      "feat/agent-b": "dbe85c04e6d51ac43ac679ffbd413c94240099b1"
+    }
+  },
+  "scenario": "negative_no_overlap",
+  "sessions": [
+    "sess-radar-0010",
+    "sess-radar-0011"
+  ],
+  "symbols_expected": [],
+  "symbols_forbidden": [
+    "f",
+    "main",
+    "noise_0"
+  ],
+  "thresholds_ref": {
+    "adjacent_tolerance": "config:symbol.adjacent_tolerance",
+    "min_overlap_lines": "config:symbol.min_overlap_lines",
+    "note": "阈值一律**引用** config，不在真值里复制数值（K3：禁第二份数值表）。"
+  },
+  "types": [
+    "negative_no_overlap"
+  ]
+}

@@ -1,0 +1,108 @@
+{
+  "geometry": {
+    "coord": "1-based 闭区间行号（相对 repo/ 根）；changed = 有效改动区间（与基线逐行比对得出）",
+    "pair": {
+      "derived_same_parent": false,
+      "gap_lines": -1,
+      "gap_rule": null,
+      "overlap_lines": 1,
+      "same_file": true,
+      "symbol_relation": "same"
+    },
+    "recompute": "把检测引擎注释掉也能算出期望：读 repo/ 原文用 ast 取符号区间 → 两个 changed 区间是否同符号、间距是否 <= config:symbol.adjacent_tolerance → block 级看 git_expected_merge_exit → 若 pair.derived_same_parent 为真则整对不出记录。",
+    "sides": [
+      {
+        "changed": [
+          2,
+          2
+        ],
+        "kind": "write",
+        "path": "src/alpha.py",
+        "session": "sess-radar-0005",
+        "symbol": "f"
+      },
+      {
+        "changed": [
+          2,
+          2
+        ],
+        "kind": "edit",
+        "path": "src/alpha.py",
+        "session": "sess-radar-0006",
+        "symbol": "f"
+      }
+    ],
+    "symbols": {
+      "src/alpha.py": {
+        "f": [
+          1,
+          10
+        ],
+        "g": [
+          14,
+          19
+        ]
+      }
+    }
+  },
+  "git_expected_merge_exit": 1,
+  "levels_expected": [
+    "file",
+    "block",
+    "symbol"
+  ],
+  "levels_forbidden": [],
+  "notes": "一侧整文件 Write（有效改动落在第 2 行）、另一侧局部 Edit 同一行：git 试合并 exit 1，区块级必须报；被覆盖的符号是 f（g 的内容逐行未变，故不得报 g）。",
+  "objects_expected": [
+    {
+      "path": "src/alpha.py",
+      "symbol": "f"
+    }
+  ],
+  "objects_forbidden": [
+    {
+      "path": "src/alpha.py",
+      "symbol": "g"
+    },
+    {
+      "path": "src/filler.py",
+      "symbol": "noise_0"
+    }
+  ],
+  "reason": "same_symbol_and_block_conflict",
+  "repo_paths": {
+    "placeholder_root": "{{REPO_ROOT}}",
+    "repo": "scenarios/whole_file_overwrite/repo",
+    "session_roots": [
+      "claude"
+    ],
+    "sessions": "scenarios/whole_file_overwrite/sessions"
+  },
+  "repo_shas": {
+    "base_commit": "aef9be376c63886a520bc396a77a8cd496280793",
+    "branches": {
+      "feat/agent-a": "6a6b852a433cf761ec3d538f54edb17531815180",
+      "feat/agent-b": "f9636e84c508c46bbc4b140302b1b89c0be292b1"
+    }
+  },
+  "scenario": "whole_file_overwrite",
+  "sessions": [
+    "sess-radar-0005",
+    "sess-radar-0006"
+  ],
+  "symbols_expected": [
+    "f"
+  ],
+  "symbols_forbidden": [
+    "g",
+    "noise_0"
+  ],
+  "thresholds_ref": {
+    "adjacent_tolerance": "config:symbol.adjacent_tolerance",
+    "min_overlap_lines": "config:symbol.min_overlap_lines",
+    "note": "阈值一律**引用** config，不在真值里复制数值（K3：禁第二份数值表）。"
+  },
+  "types": [
+    "whole_file_overwrite"
+  ]
+}

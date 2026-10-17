@@ -96,7 +96,12 @@
    - 假项目名：`demo-radar-alpha` / `demo-radar-beta`（禁真实项目名、真实仓库名）；
    - 假包名：`demo_radar_alpha` / `demo_radar_beta`（禁真实包名、真实域名反写）；
    - 假文件路径：`demo-radar-alpha/src/alpha.py`、`demo-radar-beta/pkg/beta.py`；
-   - 假 session id：`sess-radar-0001` 起的固定序列（**禁**真实 UUID）；
+   - **合成仓库内的相对路径（M1 追加）**：`src/alpha.py`（主场景文件）、`src/beta.py`（负样本里"另一侧改的文件"）、
+     `src/filler.py`（rng 生成的**噪声**文件，两个会话都不碰它——让"不误报无关文件"有实物可打）；
+   - **会话根占位符（M1 追加）**：`{{REPO_ROOT}}`，冻结产物里代表"被物化的合成仓库根"，物化时替换为本机路径
+     （冻结产物**不得**登记本机绝对路径：那会让"在别人电脑上 `--check` 必红"，属环境依赖事实）；
+   - **假 author（M1 追加）**：`radar-user` / `radar-user@example.invalid`（git 提交的固定署名，保 sha 可复算）；
+   - 假 session id：`sess-radar-0001` 起的固定序列（M1 用到 `sess-radar-0001`–`0015`，跨场景连续分配；**禁**真实 UUID）；
    - 假用户名：`radar-user`（禁真实用户名）；
    - 假分支：`feat/agent-a`、`feat/agent-b`；
    - 假时间戳：固定基准 `2026-01-01T00:00:00Z` 起的确定偏移（禁真实会话时间）。
@@ -136,11 +141,16 @@
 | R2 | Codex `apply_patch` 载荷内文件路径字段形态 | ✅ **已闭环**（见 §六 6.2） | M1 |
 | R3 | Claude `MultiEdit` 字段形态（本机是否出现？`edits[]` 结构？） | ✅ **已闭环**：本机 **0 次**出现（见 §六 6.3） | M1 |
 | R4 | 非 Python 文件的符号级降级口径（行区间近似） | ⬜ 待核对 | M2 |
-| R5 | 冲突矩阵覆盖度门槛具体数值 | 🔶 M0 已定"每类 ≥1 + 集合覆盖"口径，数值待落 | M1（写进 `bench/manifest.json`） |
-| R6 | 本机并行样本快照是否随复核变化 | 🔶 **M1 复核**：Claude 125 个会话文件 / Codex 220 个，与题面基准日快照一致（题面 94 为"带 cwd 的会话数"，本次按文件数计，口径不同不矛盾） | M1 |
+| R5 | 冲突矩阵覆盖度门槛具体数值 | ✅ **已闭环**：门槛值落在 `bench/manifest.json` 的 `coverage.min_count_by_type`（六类各 ≥1），并附 `count_by_type` / `missing_types` / 阈值成对样例声明；`--check` 断言三者自洽 | M1 |
+| R6 | 本机并行样本快照是否随复核变化 | 🔶 **M1 复核**：Claude 125 个会话文件 / Codex 220 个，与题面基准日快照一致（题面 94 为"带 cwd 的会话数"，本次按文件数计，口径不同不矛盾）。**追加发现**：3 个 Claude journal 文件只有元信息行 → 落 `undetermined(no_message_line)` 而不是静默丢弃 | M1 |
 
 > **纪律**：R4 未闭环前，非 Python 文件的符号级一律落 `approximate=True` 且**不给符号名**，
 > 不得作为"已支持"对外宣称。R1–R3 的闭环结论已三处同步：`versions.py` / `plan/04` / `plan/07` 决策记录。
+>
+> **R1–R3 在 M1 收尾新增的落点**：三条结论都**钉进了合成矩阵**——冻结的会话日志复现了实测形态
+> （Claude 首行不带 `message`、Codex 首行恒为 `session_meta`、Codex 子会话无 `session_id`），
+> 每条场景的 `git_expected_merge_exit` 由 `--check` **现场真跑 `merge-tree`** 复核。
+> 即："我们按实测形态解析"这句话现在有可复跑的实物支撑（`tests/test_bench_matrix.py`）。
 
 ---
 
@@ -216,3 +226,28 @@
 2. **会话唯一标识不能用 `sessionId`**：Claude 主/子文件共享同一 `sessionId`，Codex 子会话干脆
    没有 `session_id`。改用 `session_key = "<source>:<相对路径>"`（由输入唯一确定、可复算），
    `derived_from` 指向父会话的 `session_key`。
+
+### 6.5 合成矩阵的落盘形态（M1 收尾，2026-10-17）
+
+`bench/` 是**冻结数据**（生成物，禁手改），台账在 `bench/manifest.json`。三条落盘决定都来自实测：
+
+| 决定 | 内容 | 依据 |
+|---|---|---|
+| **只冻基线文本，不冻 `.git`** | `scenarios/<id>/repo/` 放合成仓库的基线源码；`.git` 不入仓 | `.git` 内部字节随 zlib/git 版本与随机化临时名漂，纳入"逐字节比对"会让 CI 四腿同点全红 |
+| **提交可复现改用 sha 复算** | 真值里记 `repo_shas`（base + 各分支）；`--check` 重新物化并复算 sha | sha 只由内容 + 固定元数据决定，跨平台稳定（比"比对 .git 字节"更强也更可靠） |
+| **机器无关** | 会话日志里的会话根写占位符 `{{REPO_ROOT}}`；`--check` 常驻断言冻结产物里零绝对路径 | 冻进本机路径 = 登记环境依赖事实 → 别人电脑上 `--check` 必红 |
+
+**每条场景的 git 行为（现场真跑复核，不是抄来的）**：
+
+| 场景 | merge-tree exit | 含义 |
+|---|---|---|
+| `same_file_diff_symbol` | 0 | 不同函数 → git 自动合并成功；**区块级不得报**，价值在符号级 |
+| `same_symbol_diff_lines` | 0 | 同函数相隔 6 行 → git 静默合并；**这正是符号级的价值窗口** |
+| `whole_file_overwrite` | 1 | 同区域真冲突 → 区块级必须报 |
+| `subagent_derived` | 0 | 几何同场景 2，但两侧同一 parent 派生 → 一条都不报（靠 `derived_from` 认定，不是靠几何） |
+| `negative_no_overlap` | 0 | 不同文件 → 空检出（防误报主力用例；仓库里另有 rng 生成的噪声文件 `src/filler.py`） |
+| `threshold_exact` | 0 | 不同符号、间距**恰等于** `symbol.adjacent_tolerance` → 命中相邻符号 |
+| `threshold_near_miss` | 0 | 间距 = 容差 + 1 → **不命中**（与上一条成对卡在边界两侧） |
+
+> 复跑命令：`py -X utf8 -m agent_conflict_radar.bench.gen --check`
+> （两层断言 + 提交 sha 复算 + 上表的 merge-tree exit 现场复核）。

@@ -265,6 +265,27 @@ class Config:
         """深拷贝成普通 dict（可 JSON 序列化）。用于 `radar config` 的可核验输出。"""
         return {name: dict(self._data[name]) for name in sorted(self._data)}
 
+    def with_override(self, section: str, key: str, value: Any) -> "Config":
+        """返回一个**只读覆盖**后的新视图：原对象不变、不写盘、不改配置文件。
+
+        为什么需要它：CLI 的 `--window` 要覆盖 `window.scan_days`。把 CLI 参数直接塞进
+        "唯一权威文件"会毁掉 K3（数值就有了第二处来源）；在下游再读一次参数则会让
+        "生效值从哪来"变得说不清。所以覆盖**只作用于本次调用的内存视图**，并复用同一套
+        校验（缺键 / 未知键 / 类型不符一律报错），下游仍然只有一个取值入口 `get()`。
+        """
+        schema = _schema()
+        if section not in schema:
+            raise ConfigError("不能覆盖未知配置节 %r（可选：%s）" % (section, sorted(schema)))
+        if key not in schema[section]:
+            raise ConfigError("不能覆盖未知配置项 %s.%s（可选：%s）" % (section, key, sorted(schema[section])))
+        if value is None:
+            raise ConfigError("覆盖值不能为空：%s.%s（调用方应在本处不传覆盖，而不是传 None）" % (section, key))
+        checked = _check_type(section, key, value, schema[section][key], self.source_path)
+        data = {name: dict(self._data[name]) for name in self._data}
+        data[section][key] = checked
+        frozen = {name: MappingProxyType(data[name]) for name in data}
+        return Config(MappingProxyType(frozen), self.source_path)
+
     def __repr__(self) -> str:  # pragma: no cover - 调试用
         return "Config(source_path=%r, sections=%r)" % (str(self.source_path), sorted(self._data))
 

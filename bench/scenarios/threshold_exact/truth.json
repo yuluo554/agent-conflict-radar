@@ -1,0 +1,116 @@
+{
+  "geometry": {
+    "coord": "1-based 闭区间行号（相对 repo/ 根）；changed = 有效改动区间（与基线逐行比对得出）",
+    "pair": {
+      "derived_same_parent": false,
+      "gap_lines": 3,
+      "gap_rule": {
+        "lhs": "gap_lines",
+        "op": "eq",
+        "rhs": {
+          "config_ref": "config:symbol.adjacent_tolerance",
+          "offset": 0
+        }
+      },
+      "overlap_lines": 0,
+      "same_file": true,
+      "symbol_relation": "different"
+    },
+    "recompute": "把检测引擎注释掉也能算出期望：读 repo/ 原文用 ast 取符号区间 → 两个 changed 区间是否同符号、间距是否 <= config:symbol.adjacent_tolerance → block 级看 git_expected_merge_exit → 若 pair.derived_same_parent 为真则整对不出记录。",
+    "sides": [
+      {
+        "changed": [
+          10,
+          10
+        ],
+        "kind": "edit",
+        "path": "src/alpha.py",
+        "session": "sess-radar-0012",
+        "symbol": "f"
+      },
+      {
+        "changed": [
+          14,
+          14
+        ],
+        "kind": "edit",
+        "path": "src/alpha.py",
+        "session": "sess-radar-0013",
+        "symbol": "g"
+      }
+    ],
+    "symbols": {
+      "src/alpha.py": {
+        "f": [
+          1,
+          10
+        ],
+        "g": [
+          14,
+          19
+        ]
+      }
+    }
+  },
+  "git_expected_merge_exit": 0,
+  "levels_expected": [
+    "file",
+    "symbol"
+  ],
+  "levels_forbidden": [
+    "block"
+  ],
+  "notes": "两侧落在**不同符号**（f 的末行 / g 的首行），间距恰好等于 `symbol.adjacent_tolerance`→ 按 `<=` 语义命中相邻符号（符号级报两侧符号）。间距值不在真值里写死，改成引用 config。",
+  "objects_expected": [
+    {
+      "path": "src/alpha.py",
+      "symbol": "f"
+    },
+    {
+      "path": "src/alpha.py",
+      "symbol": "g"
+    }
+  ],
+  "objects_forbidden": [
+    {
+      "path": "src/filler.py",
+      "symbol": "noise_0"
+    }
+  ],
+  "reason": "adjacent_range_within_tolerance",
+  "repo_paths": {
+    "placeholder_root": "{{REPO_ROOT}}",
+    "repo": "scenarios/threshold_exact/repo",
+    "session_roots": [
+      "claude"
+    ],
+    "sessions": "scenarios/threshold_exact/sessions"
+  },
+  "repo_shas": {
+    "base_commit": "aef9be376c63886a520bc396a77a8cd496280793",
+    "branches": {
+      "feat/agent-a": "b3ec3441aaa406f7ccf38a986a7ae0ffb4592408",
+      "feat/agent-b": "5579ce15e7761cea99fd609e6465126a3de72391"
+    }
+  },
+  "scenario": "threshold_exact",
+  "sessions": [
+    "sess-radar-0012",
+    "sess-radar-0013"
+  ],
+  "symbols_expected": [
+    "f",
+    "g"
+  ],
+  "symbols_forbidden": [
+    "noise_0"
+  ],
+  "thresholds_ref": {
+    "adjacent_tolerance": "config:symbol.adjacent_tolerance",
+    "min_overlap_lines": "config:symbol.min_overlap_lines",
+    "note": "阈值一律**引用** config，不在真值里复制数值（K3：禁第二份数值表）。"
+  },
+  "types": [
+    "threshold_adjacent"
+  ]
+}

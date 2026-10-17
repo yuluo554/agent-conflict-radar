@@ -36,6 +36,11 @@ jobs:
       - name: 全量测试
         run: python -m pytest -q
 
+      - name: 合成矩阵自检（K10：冻结产物形态 + 重生成逐字节 + 提交 sha 复算）
+        # 单独一步（而不是只藏在离线冒烟里）：失败时要能一眼看出"是矩阵坏了还是命令契约坏了"。
+        # 离线冒烟里也会再跑一次——本地没接 CI 时那一条是单入口，冗余是有意的。
+        run: python -m agent_conflict_radar.bench.gen --check
+
       - name: 离线冒烟（模块通路 + 裸 console script 通路 + 零网络导入面审计）
         # 步骤逻辑落 tools/ 脚本而不是内联 shell：可本地逐条复跑、可被测试引用、
         # 不受 heredoc 缩进与行尾影响。
