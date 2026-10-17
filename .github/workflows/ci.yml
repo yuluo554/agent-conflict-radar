@@ -1,0 +1,43 @@
+name: ci
+
+# 四矩阵：windows / ubuntu × Python 3.8 / 3.12。
+# 3.8 是项目底线（自写受限 TOML 子集解析器的原因就在这条版本线上）；3.12 是当前主用版本。
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.8", "3.12"]
+    env:
+      # 编码三加固之二（另外两层在代码里）：CI 全部步骤统一 utf-8，
+      # 否则 `python -m pytest` 打印中文即 UnicodeEncodeError（管道是 cp1252 时）。
+      PYTHONUTF8: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: 安装（与 README 快速开始同一 extras 集合）
+        run: |
+          python -m pip install --upgrade "setuptools>=61" wheel
+          python -m pip install -e ".[dev]"
+
+      - name: 全量测试
+        run: python -m pytest -q
+
+      - name: 离线冒烟（模块通路 + 裸 console script 通路 + 零网络导入面审计）
+        # 步骤逻辑落 tools/ 脚本而不是内联 shell：可本地逐条复跑、可被测试引用、
+        # 不受 heredoc 缩进与行尾影响。
+        # --strict：console script 缺失即失败（本步骤的前提就是刚做过 editable 安装）。
+        run: python tools/verify_offline.py --strict

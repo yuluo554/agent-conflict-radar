@@ -1,0 +1,12 @@
+# 行尾归一：源码在克隆后一律 LF，避免"本机 CRLF / CI LF"导致的逐字节一致守门漂移。
+* text=auto eol=lf
+
+# 二进制与需要字节冻结的产物必须标 -text，防止克隆时被 EOL 归一化（sha256 会失配）。
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary

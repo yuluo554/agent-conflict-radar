@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-conflict-radar"
+dynamic = ["version"]
+description = "多 agent 并行开发冲突雷达：在写入发生前按 worktree/会话/文件/函数符号四级粒度预判并行冲突（纯本地、只读、零上传）"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "yuluo554" }]
+keywords = [
+    "git", "worktree", "conflict-detection", "multi-agent", "claude-code", "codex",
+    "symbol-level", "ast", "local-first", "cli",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Version Control :: Git",
+    "Topic :: Software Development :: Quality Assurance",
+]
+# 零第三方运行时依赖：全链路只用标准库（ast / json / subprocess / pathlib / argparse）。
+# 这是"纯本地零上传"与"断网可跑"的结构性前提，不是偏好。
+dependencies = []
+
+[project.optional-dependencies]
+# dev = 测试期依赖。README 快速开始与 CI 全部 job 使用同一 extras 集合（K14 对账门）。
+dev = ["pytest>=7,<9"]
+
+[project.scripts]
+radar = "agent_conflict_radar.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/yuluo554/agent-conflict-radar"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.dynamic]
+version = { attr = "agent_conflict_radar.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

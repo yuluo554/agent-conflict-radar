@@ -1,0 +1,52 @@
+# agent-conflict-radar 数值口径唯一权威（K3）
+#
+# 纪律（改动前先读 plan/07 §四 K3 / K5）：
+#   1. 本文件是全项目**唯一**的数值定义处。README / 技术报告 / 报告产物 / 基准输出一律引用，
+#      **不得复制第二份数值表**。
+#   2. 代码里**零内联默认值**：本文件缺失、键名未知、类型不符、或出现解析器不支持的 TOML 形态，
+#      一律显式报错并以退出码 3 终止；**绝不回落默认值**（回落 = 出现第二份真相）。
+#   3. 键名一经冻结即属"动了会打挂测试与基准"的口径；改名必须同步：
+#      config/radar.toml → config.py 的 REQUIRED 模式 → 消费方 → 测试 → README → plan/07 决策记录。
+
+[schema]
+# 键空间版本。解析器比对它：不认识的版本显式报错，不按最宽松规则猜测。
+version = 1
+
+[window]
+# 会话被判定为"活跃"的时间跨度：该会话最后一次写操作之后仍视为活跃的分钟数。
+# 计划的推断与报告的窗口展示都取这一处（人数/条数类展示值也从这里渲染，不手写）。
+active_minutes = 30
+# 只扫描最近这些天内活动的会话（天）。窗口外会话一律不进活跃表。
+scan_days = 14
+
+[symbol]
+# 行区间"相邻"判定的容差行数：两侧改动区间间距 <= 该值时视为相邻（可提示先合并）。
+adjacent_tolerance = 3
+# 判定"重叠"所需的最小交集行数：交集行数 >= 该值才算重叠。
+min_overlap_lines = 2
+
+[severity]
+# 严重度权重，只用于排序与展示分级；数值越高越紧急。
+# 口径顺序（不可乱）：同一符号被两侧修改 > 同文件不同符号 > 行区间相邻 > 仅文件级同改。
+same_symbol = 50
+same_file_diff_symbol = 30
+adjacent_lines = 20
+file_only = 10
+
+[git]
+# 单个 git 子进程的超时秒数；超时按"依赖/环境缺失"降级（exit 3），不静默当无冲突。
+timeout_seconds = 20
+# 是否启用 git merge-tree 无副作用试合并（区块级检测）。只读；关闭时区块级直接标 degraded。
+merge_tree_enabled = true
+
+[report]
+# 人读报告里单条冲突展示的证据条数上限（防止一条冲突刷屏）。
+max_evidence_items = 5
+# 是否尝试桌面通知；不可用时静默跳过并在产物里标 notify_unavailable，不影响主流程与退出码。
+notify = false
+
+[paths]
+# 会话根目录留空 = 按常见位置探测（绝不硬编码用户名）。
+# 显式传 --claude-root / --codex-root 或设置 RADAR_CLAUDE_ROOT / RADAR_CODEX_ROOT 时以显式值为准。
+claude_root = ""
+codex_root = ""
