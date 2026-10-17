@@ -146,6 +146,7 @@ def _module_argv(*args: str) -> List[str]:
 
 #: 夹具缓存：`build_cases` 与 `console_script_cases` 共用同一份（否则会重复物化并互相删目录）。
 _SCAN_FIXTURES: dict = {}
+_INTENT_FIXTURES: dict = {}
 
 
 def _scan_fixture(scratch: str) -> Tuple[str, str, str]:
@@ -170,10 +171,43 @@ def _scan_fixture(scratch: str) -> Tuple[str, str, str]:
     return _SCAN_FIXTURES[scratch]
 
 
+def _intent_fixture(scratch: str) -> Tuple[str, str, str]:
+    """造一份 `intent` 的合成夹具（M2）：真 git 仓库（含 staged/unstaged 未提交改动）+ 会话根。
+
+    选 `intent_disk_wins`：它同时有"会话侧区间"与"磁盘侧区间"，并且两条改动一条进索引、
+    一条只进工作区——冒烟因此顺带验到 `git diff` 与 `git diff --cached` **两条通路**。
+    """
+    import agent_conflict_radar.bench.gen as bench_gen
+
+    if scratch in _INTENT_FIXTURES:
+        return _INTENT_FIXTURES[scratch]
+    scenario = bench_gen.intent_scenario_by_id("intent_disk_wins")
+    dest = os.path.join(scratch, "intent-fixture")
+    bench_gen.materialize_intent_scenario(scenario, dest)
+    claude = os.path.join(dest, "sessions", "claude")
+    codex = os.path.join(dest, "sessions", "codex")
+    if not os.path.isdir(codex):
+        # 场景里没有该源时传一个**空目录**（缺省探测会落到真实用户日志上，见 plan/05 §七）。
+        codex = os.path.join(scratch, "intent-empty-codex")
+        os.makedirs(codex, exist_ok=True)
+    _INTENT_FIXTURES[scratch] = (os.path.join(dest, "repo"), claude, codex)
+    return _INTENT_FIXTURES[scratch]
+
+
 def _scan_argv(fixture, *prefix):
     repo, claude_root, codex_root = fixture
     return list(prefix) + [
         "scan", "--repo", repo,
+        "--claude-root", claude_root,
+        "--codex-root", codex_root,
+        "--now", "2026-01-01T00:10:00Z",
+    ]
+
+
+def _intent_argv(fixture, *prefix):
+    repo, claude_root, codex_root = fixture
+    return list(prefix) + [
+        "intent", "--repo", repo,
         "--claude-root", claude_root,
         "--codex-root", codex_root,
         "--now", "2026-01-01T00:10:00Z",
@@ -221,6 +255,31 @@ def build_cases(repo_dir: str) -> List[Case]:
         )
     )
 
+    # ---- 已交付：intent（M2；合成夹具含 staged/unstaged 未提交改动）----
+    intent_fixture = _intent_fixture(repo_dir)
+    cases.append(
+        Case(
+            "module:intent(合成夹具)",
+            _intent_argv(intent_fixture, *_module_argv()),
+            EXIT_OK,
+            cwd=repo_dir,
+            command="intent",
+            note="成功恒为 0（coarse/unknown 落点只提示不改码）；夹具含一条 staged + 一条 unstaged 改动",
+        )
+    )
+    cases.append(
+        Case(
+            "env:intent 会话源缺失",
+            _module_argv("intent", "--repo", intent_fixture[0],
+                         "--claude-root", os.path.join(repo_dir, "no-such-root"),
+                         "--codex-root", intent_fixture[2], "--now", "2026-01-01T00:10:00Z"),
+            EXIT_ENVIRONMENT,
+            cwd=repo_dir,
+            command="intent",
+            note="显式指定的会话根不存在 → exit 3，不得退化成 exit 0 空结果",
+        )
+    )
+
     # ---- 阶段未就绪命令（当前契约：exit 4）----
     for command in sorted(stages.STAGE_NOT_READY):
         argv = _module_argv(command) + _repo_flag_if_supported(command, repo_dir)
@@ -239,7 +298,7 @@ def build_cases(repo_dir: str) -> List[Case]:
     cases.append(
         Case("usage:未知子命令", _module_argv("definitely-not-a-command"), EXIT_USAGE, cwd=repo_dir, command="--none--")
     )
-    for command in ("scan", "report"):
+    for command in ("scan", "intent", "report"):
         cases.append(
             Case(
                 "usage:%s 未知旗标" % command,
@@ -296,11 +355,19 @@ def build_cases(repo_dir: str) -> List[Case]:
 def console_script_cases(repo_dir: str) -> List[Case]:
     """裸 console script 通路（`radar …`）。只在已安装时有意义。"""
     fixture = _scan_fixture(repo_dir)
+    intent_fixture = _intent_fixture(repo_dir)
     cases = [
         Case("console:--version", ["radar", "--version"], EXIT_OK, cwd=repo_dir, command="--version"),
         Case("console:config", ["radar", "config"], EXIT_OK, cwd=repo_dir, command="config"),
         Case("console:selftest", ["radar", "selftest"], EXIT_OK, cwd=repo_dir, command="selftest"),
         Case("console:scan(合成夹具)", _scan_argv(fixture, "radar"), EXIT_OK, cwd=repo_dir, command="scan"),
+        Case(
+            "console:intent(合成夹具)",
+            _intent_argv(intent_fixture, "radar"),
+            EXIT_OK,
+            cwd=repo_dir,
+            command="intent",
+        ),
     ]
     for command in sorted(stages.STAGE_NOT_READY):
         argv = ["radar", command] + _repo_flag_if_supported(command, repo_dir)

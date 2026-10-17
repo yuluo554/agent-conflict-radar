@@ -1,0 +1,87 @@
+{
+  "counts_expected": {
+    "coarse": 0,
+    "entries": 1,
+    "entries_without_session": 0,
+    "exact": 1,
+    "multi_edit_ops": 0,
+    "non_python_entries": 0,
+    "unknown": 0,
+    "unknown_write_ops": 0,
+    "write_ops": 1
+  },
+  "entries_expected": [
+    {
+      "approximate": false,
+      "changed_ranges": [
+        [
+          3,
+          3
+        ]
+      ],
+      "last_write_ts": "2026-01-01T00:01:00Z",
+      "path": "src/beta.py",
+      "precision": "exact",
+      "ranges_source": "session",
+      "reasons": [],
+      "session": "codex:sess-radar-0024.jsonl",
+      "session_id": "sess-radar-0024",
+      "write_ops": 1
+    }
+  ],
+  "geometry": {
+    "baseline": {
+      "docs/notes.md": 4,
+      "src/alpha.py": 19,
+      "src/beta.py": 8,
+      "src/dup.py": 8,
+      "src/filler.py": 22
+    },
+    "coord": "1-based 闭区间行号（相对 repo/ 根）；changed = 与基线逐行比对得出的有效改动区间",
+    "dirty": [],
+    "ops": [
+      {
+        "anchor": [
+          "    total = value + 1"
+        ],
+        "anchor_hits": 1,
+        "changed": [
+          3,
+          3
+        ],
+        "missing_path": false,
+        "path": "src/beta.py",
+        "replace_all": false,
+        "replacement": [
+          "    total = value + 11"
+        ],
+        "session": "sess-radar-0024",
+        "source": "codex",
+        "timestamp": "2026-01-01T00:01:00Z",
+        "tool": "apply_patch",
+        "via": "exec"
+      }
+    ],
+    "recompute": "把 intent 引擎注释掉也能算出期望：读 repo/ 原文 → 锚点命中次数（0/1/多）决定 coarse/exact；replace_all 一律 coarse；MultiEdit 与缺 file_path 一律 unknown；非 .py 文件 approximate=True；有未提交改动的路径区间取磁盘 hunk（dirty 声明）并在与会话区间不同时点名 disk_and_session_disagree。"
+  },
+  "notes": "R2 的第二形态：patch 经 `exec` 下发（`name == \"exec\"`、`input` 是 shell 文本里嵌的patch）。同一文件里另有一条**不含 patch 标记**的 `exec` 调用（反例）→ 不得被认成写操作。",
+  "paths_forbidden": [],
+  "reason": "codex_exec_variant_is_recognized",
+  "repo_shas": {
+    "base_commit": "660019a2690184cc50c85ff47d43a42b8ed6b0fd",
+    "branches": {}
+  },
+  "scenario": "intent_codex_exec_patch",
+  "session_roots": [
+    "codex"
+  ],
+  "types": [
+    "intent_precision"
+  ],
+  "unknown_expected": {
+    "entries": 0,
+    "last_write_ts": [],
+    "ops": 0,
+    "reasons": []
+  }
+}

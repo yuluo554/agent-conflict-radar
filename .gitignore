@@ -82,11 +82,15 @@ exports/
 data/**/_private/
 data/**/_real/
 
-# 例外（**全仓唯一一处**）：bench/ 下合成矩阵的会话日志必须入仓——它们是生成器产出的白名单假值
-# （K11：假 session id `sess-radar-NNNN`、假用户名 `radar-user`、固定基准时间 2026-01-01 起），
-# 而且是 `--check` 逐字节比对的对象。判据不是目录名而是内容：生成器 `--check` 断言这些产物里
-# 不出现本机绝对路径（占位符 `{{REPO_ROOT}}` 代替），`tests/test_bench_matrix.py` 再断言零真实值。
+# 例外（**全仓仅此两处，都是生成器产出的白名单假值**）：`bench/` 下合成矩阵的会话日志必须入仓——
+# 它们是生成器同步产出的白名单假值（K11：假 session id `sess-radar-NNNN`、假用户名 `radar-user`、
+# 固定基准时间 2026-01-01 起），而且是 `--check` 逐字节比对的对象。
+# 判据不是目录名而是内容：生成器 `--check` 断言这些产物里不出现本机绝对路径
+# （会话根写占位符 `{{REPO_ROOT}}`），`tests/test_bench_matrix.py` 与 `tests/test_intent.py`
+# 再断言零真实值。
 !bench/scenarios/*/sessions/
+# M2 起追加：意图矩阵的会话日志同理（同一套白名单纪律、同一套 `--check` 断言）。
+!bench/intents/*/sessions/
 
 # 系统文件
 Thumbs.db

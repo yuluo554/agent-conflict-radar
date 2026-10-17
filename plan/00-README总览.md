@@ -20,9 +20,10 @@
 | [04-模块详设.md](04-模块详设.md) | M1–M5 逐模块输入/输出/算法/证据/确定性纪律/降级路径 | ✅ M0 定稿 2026-10-17 |
 | [05-数据计划.md](05-数据计划.md) | 合成矩阵目录与格式、植入真值语义、覆盖度门槛、生成与冻结纪律、真实数据使用边界、R1–R6 闭环表 | ✅ M0 定稿 2026-10-17 |
 | [06-里程碑.md](06-里程碑.md) | M0–M6 逐里程碑目标 / 任务 / DoD / 降级策略 / 状态回写纪律 | ✅ M0 定稿 2026-10-17 |
-| [07-交付对标与决策记录.md](07-交付对标与决策记录.md) | 材料与评分逐项对标、M0 起新增决策、**既定口径 K 清单（K1–K16）**、M0 猜测待勘误表、诚实口径尾注 | ✅ M0 定稿 2026-10-17 |
+| [07-交付对标与决策记录.md](07-交付对标与决策记录.md) | 材料与评分逐项对标、M0 起新增决策、**既定口径 K 清单（K1–K19）**、M0 猜测待勘误表、诚实口径尾注（M1 / M2 各一节） | ✅ M0 定稿 2026-10-17，M1·M2 收尾各追加勘误与决策 |
 | [HANDOFF-M1.md](HANDOFF-M1.md) | 上一棒交接（M0→M1）：进度+证据 / 待办 / K 口径 / 环境坑 / DoD / 命令速查 | ✅ 已落盘 2026-10-17（M1 已按它完成，留作过程留档） |
-| [HANDOFF-M2.md](HANDOFF-M2.md) | 下一棒交接（M1→M2）：进度+证据 / 待办 / K 口径 / 环境坑 / DoD / 命令速查 | ✅ M1 收尾时落盘 2026-10-17 |
+| [HANDOFF-M2.md](HANDOFF-M2.md) | 上一棒交接（M1→M2）：进度+证据 / 待办 / K 口径 / 环境坑 / DoD / 命令速查 | ✅ 已落盘 2026-10-17（M2 已按它完成，留作过程留档） |
+| [HANDOFF-M3.md](HANDOFF-M3.md) | 下一棒交接（M2→M3）：进度+证据 / 待办 / K 口径 / 环境坑 / DoD / 命令速查 | ✅ M2 收尾时落盘 2026-10-18 |
 
 > 里程碑收尾纪律沿用系列惯例：**DoD 达成后必须在本对话内写完下一棒的 `HANDOFF-M<next>.md` 才允许结束**。
 
@@ -62,7 +63,7 @@
 | M0 骨架（可安装包 + 退出码契约 + 数值单点 + 编码守卫 + 门禁与变异验证） | 纯标准库；`py -3.8` / `py -3.12` 本机实测 | 随包，零网络；`pip install -e .` 秒装 | 双解释器全量 pytest + `tools/verify_offline.py --strict`（两条通路 23 用例）+ `tools/verify_mutation.py`（10 组变异全部被检出） | ✅ M0 完成（本地等价校验；未接远端，CI 待首推验证） |
 | M1 工作区与会话发现（worktree + 双 harness 会话归集） | `git worktree list --porcelain` ✅ 命令可用；Claude 125 个会话文件全带 `cwd`+`gitBranch` ✅；Codex 220 个 `session_meta.payload.cwd` 全覆盖 ✅ | 随包，零网络；路径可覆盖 | 合成场景逐字段对账 + 同输入双跑逐字节一致 + 未知格式显式报错 + `--check` 的 merge-tree 现场复核 | ✅ **M1 完成**（2026-10-17）：`radar scan` 交付（K15 四步走完）；双解释器 179 passed / 1 skipped；冒烟 25 用例；变异 16 组全检出 |
 | M1 合成矩阵起步（生成器 + 植入真值 + 覆盖度台账 + 两层 `--check`） | 程序化构造七条场景（同文件异符号 / 同符号异行 / 整文件覆盖 / subagent 派生 / 负样本 / 阈值成对） | 随包零外部依赖；`bench/` 为冻结数据 | `bench/gen.py --check`：冻结产物形态 + 重生成逐字节 + 提交 sha 复算 + 七条场景的 merge-tree exit 现场复核 | ✅ **M1 完成**（2026-10-17）：`missing_types` 为空；真值可脱离引擎独立复算 |
-| M2 变更意图提取（Edit/Write/apply_patch + git status/diff） | 会话内 `file_path` / `old_string` / `new_string` / `apply_patch` 文本；`git status --porcelain` + `git diff` | 随包 | 合成会话解析对账；无法定位时 `coarse` / `unknown` 而非猜测；同输入同输出 | ⬜ 待 M2 |
+| M2 变更意图提取（Edit/Write/apply_patch + git status/diff） | 会话内 `file_path` / `old_string` / `new_string` / `apply_patch` 文本；`git status --porcelain` + `git diff` + `git diff --cached`；`git show HEAD:<path>` 作定位基线 | 随包 | 合成会话解析对账（八条意图场景逐条一致）；无法定位时 `coarse`/`unknown` 而非猜测；同输入同输出 | ✅ **M2 完成**（2026-10-18）：`radar intent` 交付（K15 四步走完）；双解释器 248 passed / 1 skipped；冒烟 27 用例；变异 22 组全检出；R4 闭环 |
 | M3 三级检测（文件 / 区块 / 符号） | `git merge-tree --write-tree` ✅；Python `ast` ✅ | 随包；git 为运行期必需（缺失 exit 3） | 合成冲突矩阵检出集合精确匹配；负样本零误报；只读断言（工作区 hash 前后一致） | ⬜ 待 M3 |
 | M4 预警报告（Markdown + JSON + 可选通知） | M3 冲突清单 | 随包 | 报告排序稳定；退出码四语义测试；通知不可用时 `notify_unavailable` 不影响主流程 | ⬜ 待 M4 |
 | M5 合成冲突矩阵 + 植入真值 | 程序化构造场景（同文件异函数 / 同函数异行 / 整文件覆盖 / subagent 派生 / 负样本） | 随包零外部依赖 | 生成器同步标注真值；一条命令复现；覆盖度口径写 manifest | 🔶 **M1 已交付矩阵本体**（7 条场景 + 真值 + 台账 + 两层 `--check`）；`radar bench` 评分与矩阵补全待 M5 |
@@ -81,7 +82,7 @@
 | 能力名词 | 哪条交付态命令产出它 | 哪条基准/测试断言它 |
 |---|---|---|
 | 工作区与会话发现 | `radar scan <repo>` 输出的 `workspaces[*]` / `sessions[*]` | 合成场景对账：worktree 集合、会话 cwd/branch、subagent `derived_from` |
-| 变更意图集合 | `radar intent <repo>` 输出的 `files[*].sessions[]` / `last_write_ts` | 合成会话解析对账（含 `coarse` / `unknown` 分支） |
+| 变更意图集合 | `radar intent <repo>` 输出的 `entries[*].changed_ranges` / `last_write_ts` / `writes[*]` | 意图矩阵七条场景逐条对账（含 `coarse` / `unknown` 分支）+ 三分法计数恒等式 + `tests/test_intent_parse.py` 的纯函数级用例 |
 | 文件级冲突 | `radar detect <repo>` 输出 `conflicts[level=file]` | 矩阵场景 1 / 3 + 负样本空检出 |
 | 区块级冲突（试合并） | `radar detect` 输出 `conflicts[level=block]` | 矩阵场景 1 / 3；断言 `git merge-tree` 只读（工作区 hash 不变） |
 | 符号级冲突 | `radar detect` 输出 `conflicts[level=symbol]` 的 `symbol` + `line_ranges` | 矩阵场景 2 / 3 精确匹配；负样本零误报 |
@@ -98,7 +99,7 @@
 |---|---|---|
 | **M0 骨架**（2026-10-17 完成） | ①计划文档 02–07 落盘；②可安装骨架（`src` 布局 + 零运行时依赖 + `radar` / `python -m` 双通路）；③数值口径单点 `config/radar.toml` + 自写受限 TOML 子集解析器；④**四件前置工程**（退出码契约锁进测试 / 双解释器全量 pytest / 冻结序列化契约 / 编码守卫进入口）；⑤八组骨架门禁 + `tools/verify_offline.py` + `tools/verify_mutation.py`；⑥CI 四矩阵预置；⑦`plan/HANDOFF-M1.md` | 见 [06-里程碑.md](06-里程碑.md) M0 节。**本地等价校验结果**：`py -3.8`/`py -3.12` 各 **122 passed / 1 skipped**（跳项为"当前文件系统不支持目录符号链接"，声明式跳过并说明原因）；离线冒烟 `--strict` 两条通路 **23 用例全过**；**变异验证 10 组全部被对应守门抓到**（仓库按字节还原）。未接远端 → CI 待首推验证 |
 | **M1 数据先行**（2026-10-17 完成） | ①worktree + 双 harness 会话归集（`radar scan`）；②**合成冲突场景矩阵 + 植入真值台账**（七条场景 / 六个覆盖类型）；③格式版本检测口径（显式指纹集合）；④会话字段核对记录进 `data/README` §六 | 见 [06-里程碑.md](06-里程碑.md) M1 节"收尾结论"。**本地等价校验结果**：`py -3.8`/`py -3.12` 各 **179 passed / 1 skipped**；离线冒烟 `--strict` **25 用例全过**；**变异验证 16 组**全部被对应守门抓到；`bench/gen.py --check` 两层断言 + 提交 sha 复算 + merge-tree exit 现场复核全过。未接远端 → CI 待首推验证 |
-| **M2 意图提取** | Edit/Write/MultiEdit/apply_patch 解析 + `git status`/`git diff` 合并；`coarse`/`unknown` 降级 | 合成会话解析对账；不可定位不猜测；同一输入同输出 |
+| **M2 意图提取**（2026-10-18 完成） | ①`intent.py`：Claude `Edit`/`Write`/`MultiEdit` + Codex `apply_patch`（含 `exec` 同形变体）；②三分法 `exact`/`coarse`/`unknown` + 计数恒等式；③磁盘对账（`git diff` / `git diff --cached`，磁盘是事实）；④R4 闭环（非 Python 行区间近似） | 见 [06-里程碑.md](06-里程碑.md) M2 节"收尾结论"。**本地等价校验结果**：`py -3.8`/`py -3.12` 各 **248 passed / 1 skipped**；离线冒烟 `--strict` **27 用例全过**；**变异验证 22 组**全部被对应守门抓到；`bench/gen.py --check` 两层断言 + 提交 sha 复算 + 意图矩阵脏改动现场复核全过。未接远端 → CI 待首推验证 |
 | **M3 三级检测** | 文件级 → `merge-tree` 区块级 → AST 符号级；subagent 去重 | 矩阵检出集合精确匹配（多报/漏报均失败）；负样本零误报；只读断言 |
 | **M4 预警报告** | 严重度排序、Markdown + JSON、退出码四语义、可选通知 | 报告稳定；退出码 0/1/2/3 各有测试；通知缺失不失败 |
 | **M5 基准与自检** | 完整冲突矩阵、覆盖度门槛、`radar bench` 一条命令评分 | 全部场景通过；`pip install .` 干净环境实跑；断网运行 |
@@ -176,3 +177,33 @@
 2. **平台换行差异只在 Windows 侧实测**：`scan.json` 的 LF 断言、冻结产物 LF 断言都在本机验过；
    ubuntu 侧预期一致但未实跑。
 3. 3.8 之外的版本（3.9/3.10/3.11）不在矩阵里，不做承诺。
+
+---
+
+## 九、M2 收尾：诚实口径与本地等价校验
+
+**措辞纪律沿用 §七·§八（硬约束）**：本仓**仍无远端**，`git push` 一次都没跑过，因此 M2 **同样从未出现"CI 绿"字样**；
+一切 CI 类结论只写"**本地等价校验（未接远端，CI 待首推验证）**"。
+
+**可指认的替代证据**（本机实跑，2026-10-18）：
+
+| 等价物 | 结果 |
+|---|---|
+| `py -3.8 -X utf8 -m pytest -q` | 248 passed / 1 skipped（退出码 0） |
+| `py -3.12 -X utf8 -m pytest -q` | 248 passed / 1 skipped（退出码 0） |
+| `py -3.12 -X utf8 tools/verify_offline.py --strict` | **27 用例全过**（模块通路 + 生成器自检 + 裸 console script 通路 + 零网络导入面审计），退出码 0 |
+| `py -3.12 -X utf8 -m agent_conflict_radar.bench.gen --check` | 两层断言 + 提交 sha 复算 + merge-tree 现场复核 + **意图矩阵的脏改动现场复核**全过，退出码 0 |
+| `py -3.12 -X utf8 tools/verify_mutation.py` | 基线绿 + **22 组**变异全部被对应守门抓到，仓库按字节还原，退出码 0 |
+
+**M2 新增的"等价"缺口（写清，不笼统一句"本地等价校验通过"）**：
+
+1. **git 版本差异未在真 CI 上验过**：M2 新依赖 `git diff -U0` 的 hunk 头形态与 `git status --porcelain -z`
+   的记录协议，本机 git `2.54.0.windows.1` 实测通过；ubuntu 侧版本与 locale 差异**未实跑**。
+2. **`-z` 协议里的中文路径**只有纯函数级用例（`decode_status_records`），本机没有真实中文路径的合成夹具
+   → 端到端未覆盖。**如实登记为缺口**。
+3. **`function_call` 形态的 `arguments`**（JSON 字符串里的 `input`）有纯函数级用例，端到端只在
+   `custom_tool_call` 与 `exec` 上跑过（本机实测里前者出现频次远高）。
+4. 3.8 之外的版本（3.9/3.10/3.11）不在矩阵里，不做承诺。
+
+**详细版（含 DoD 逐项证据与偏差说明）在 [06-里程碑.md](06-里程碑.md) M2 节与
+[07-交付对标与决策记录.md](07-交付对标与决策记录.md) §八**——这里只列可指认的替代证据与缺口。

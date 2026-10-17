@@ -39,6 +39,7 @@ ALLOWED_LITERALS = {
     ("serialize.py", 2): "json indent=2，是冻结序列化契约的一部分（K2）",
     ("gitio.py", 2): "`worktree` 形态判定里的参数位置常量（是否需要第二个参数），非策略阈值",
     ("discover.py", 400): "错误详情文本的截断长度：诊断展示用常量，不是判定阈值（阈值一律读 config）",
+    ("intent.py", 400): "同 discover.py：错误详情文本的截断长度，只影响报错信息长度，不参与任何判定",
 }
 
 #: 包内**必须存在**的模块（防止"扫描面为空 → 门禁空转"）。
@@ -51,6 +52,7 @@ REQUIRED_MODULES = (
     "errors.py",
     "exit_codes.py",
     "gitio.py",
+    "intent.py",
     "paths.py",
     "serialize.py",
     "stages.py",

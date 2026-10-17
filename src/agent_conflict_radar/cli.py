@@ -25,6 +25,7 @@ from . import __version__
 from . import config as config_module
 from . import discover
 from . import gitio
+from . import intent as intent_module
 from . import serialize
 from . import stages
 from .errors import ConfigError, RadarError, UsageError
@@ -209,6 +210,8 @@ def _dispatch(args) -> int:
         return _cmd_selftest(cfg)
     if command == "scan":
         return _cmd_scan(cfg, args)
+    if command == "intent":
+        return _cmd_intent(cfg, args)
     raise UsageError("未知命令：%r" % command)  # pragma: no cover - 由 parser 兜住
 
 
@@ -235,6 +238,28 @@ def _cmd_scan(cfg, args) -> int:
     if out_dir:
         target_dir = _resolve_out_dir(out_dir)
         serialize.write_atomic(target_dir / "scan.json", text)
+    sys.stdout.write(text)
+    return EXIT_OK
+
+
+def _cmd_intent(cfg, args) -> int:
+    """`radar intent`：会话写操作 + 未提交 diff → `IntentSet`。
+
+    退出码语义（与 README 一致）：**成功恒为 0**。`undetermined` 与 `unknown` 落点只提示不改码——
+    "我们没定位到区间"不是"有冲突"；真正的环境问题（非 git 仓库 / 会话源不存在 / git 超时）走 exit 3。
+    """
+    result = intent_module.build_intent_set(
+        args.repo_resolved,
+        getattr(args, "claude_root", None),
+        getattr(args, "codex_root", None),
+        cfg,
+        now=getattr(args, "now", None),
+    )
+    text = serialize.dumps_json(result.as_dict())
+    out_dir = getattr(args, "out_dir", None)
+    if out_dir:
+        target_dir = _resolve_out_dir(out_dir)
+        serialize.write_atomic(target_dir / "intent.json", text)
     sys.stdout.write(text)
     return EXIT_OK
 

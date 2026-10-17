@@ -53,7 +53,8 @@ from ..serialize import write_atomic
 from . import rng as rng_module
 
 #: 生成器版本（`manifest.json` 的 `generator_version` 从这里取——**不手写第二份**，`plan/05` §五）。
-GENERATOR_VERSION = "m1-1"
+#: M2 起加 `intent` 真值块 + 四条意图场景（含 `exec` 同形变体 / `MultiEdit` / 歧义锚点 / 非 Python）。
+GENERATOR_VERSION = "m2-1"
 
 #: 冻结产物里的会话根占位符（物化时替换为本机路径；见模块文档第 2 条）。
 PLACEHOLDER_ROOT = "{{REPO_ROOT}}"
@@ -64,6 +65,13 @@ REPO_DIRNAME = "repo"
 SESSIONS_DIRNAME = "sessions"
 TRUTH_FILENAME = "truth.json"
 MANIFEST_FILENAME = "manifest.json"
+
+#: M2 意图真值的独立冻结树（与 M1 的冲突矩阵分开：两套真值语义不同，混在一棵树下会让
+#: `--check` 的"每条场景必须有两个改动侧"这类判据被迫放宽——那是把门改松）。
+INTENTS_DIRNAME = "intents"
+INTENT_REPO_DIRNAME = "repo"
+INTENT_SESSIONS_DIRNAME = "sessions"
+INTENT_TRUTH_FILENAME = "truth.json"
 
 #: `levels` 的规范序（`plan/07` 决策记录的"一条记录 + 粒度集合"口径）。
 LEVEL_ORDER = ("file", "block", "symbol")
@@ -89,6 +97,14 @@ MIN_COUNT_BY_TYPE = {
     "subagent_derived": 1,
     "negative_no_overlap": 1,
     "threshold_adjacent": 1,
+}
+
+#: M2 意图矩阵的覆盖度门槛（与 M1 的冲突矩阵分开登记：两套真值的语义不同）。
+#: `intent_precision` 至少 2 条——三分法的 `exact` 与 `coarse`/`unknown` 必须都有实物；
+#: `non_python_approximate` 至少 1 条——R4 的闭环口径要有可打的样本。
+MIN_INTENT_COUNT_BY_TYPE = {
+    "intent_precision": 2,
+    "non_python_approximate": 1,
 }
 
 #: 阈值边界必须**成对**出现（`plan/05` §4.2 的硬要求）：只测"该命中"的用例，阈值写错永远不红。
@@ -206,13 +222,53 @@ def _filler_lines(seed: int, functions: int) -> List[str]:
     return lines
 
 
+def _dup_lines() -> List[str]:
+    """`src/dup.py`：**歧义锚点**专用文件——同一段 3 行在文件里出现两次。
+
+    为什么单独造一个文件：要让 `old_string` 在基线里命中 2 次，最干净的构造是"两段逐字相同"。
+    在 `alpha.py` 里造重复会污染 M1 场景的符号几何，两套真值就不该共用同一份基线。
+    """
+    return [
+        "def pair_a():",
+        "    value = 1",
+        "    return value",
+        "",
+        "",
+        "def pair_b():",
+        "    value = 1",
+        "    return value",
+    ]
+
+
+def _notes_lines() -> List[str]:
+    """`docs/notes.md`：**非 Python** 文件（R4 闭环口径的实物）。"""
+    return [
+        "# synthetic notes",
+        "line one",
+        "line two",
+        "line three",
+    ]
+
+
 def _repo_files() -> Dict[str, List[str]]:
-    """合成仓库的基线文件表（冻结产物 `repo/` 的唯一来源）。"""
+    """M1 合成仓库的基线文件表（冻结产物 `repo/` 的唯一来源）。"""
     return {
         "src/alpha.py": _base_alpha_lines(),
         "src/beta.py": _base_beta_lines(),
         "src/filler.py": _filler_lines(seed=20260101, functions=3),
     }
+
+
+def _intent_repo_files() -> Dict[str, List[str]]:
+    """M2 意图矩阵的基线文件表 = M1 基线 + 歧义锚点文件 + 非 Python 文件。
+
+    多出来的两个文件只服务 M2 的两条口径（歧义锚点 / R4 非 Python 近似），
+    不该混进 M1 的冲突矩阵（那会让 M1 的"每条场景两个改动侧"判据被迫放宽）。
+    """
+    files = dict(_repo_files())
+    files["src/dup.py"] = _dup_lines()
+    files["docs/notes.md"] = _notes_lines()
+    return files
 
 
 # --------------------------------------------------------------------------------------
@@ -480,6 +536,448 @@ def scenario_by_id(ident: str) -> Scenario:
 
 
 # --------------------------------------------------------------------------------------
+# M2 意图场景表（与 M1 冲突场景**分开**：真值语义不同，判据不该互相放宽）
+# --------------------------------------------------------------------------------------
+
+
+class IntentOp(object):
+    """一条会话写操作声明（生成器只声明**输入**；期望值由基线与规则推出，不由引擎跑出来）。"""
+
+    __slots__ = ("tool", "path", "line_start", "line_end", "new_lines", "replace_all",
+                 "via", "missing_path", "write_content")
+
+    def __init__(self, tool, path, line_start=None, line_end=None, new_lines=(),
+                 replace_all=False, via="custom_tool_call", missing_path=False, write_content=None):
+        self.tool = tool
+        self.path = path
+        self.line_start = line_start
+        self.line_end = line_end
+        self.new_lines = tuple(new_lines)
+        self.replace_all = bool(replace_all)
+        #: Codex 侧的承载形态：`custom_tool_call`（专用调用）或 `exec`（同形变体）。
+        self.via = via
+        #: `file_path` 缺失（Claude 侧的 unknown 分支）。
+        self.missing_path = bool(missing_path)
+        #: `Write` 的整文件内容；`None` 表示"基线 + 本次替换"。
+        self.write_content = write_content
+
+
+class IntentSide(object):
+    """一个会话侧：它的写操作序列 + 一条**反例**调用（非写工具，必须不产出条目）。"""
+
+    __slots__ = ("session_id", "source", "branch", "start_minute", "ops", "noise_tool")
+
+    def __init__(self, session_id, source, branch=None, start_minute=0, ops=(), noise_tool=None):
+        self.session_id = session_id
+        self.source = source
+        self.branch = branch
+        self.start_minute = start_minute
+        self.ops = tuple(ops)
+        self.noise_tool = noise_tool
+
+
+class IntentScenario(object):
+    __slots__ = ("ident", "types", "reason", "sides", "dirty", "paths_forbidden", "notes")
+
+    def __init__(self, ident, types, reason, sides, dirty=(), paths_forbidden=(), notes=""):
+        self.ident = ident
+        self.types = tuple(types)
+        self.reason = reason
+        self.sides = tuple(sides)
+        #: 工作区里**未提交**的改动（磁盘侧事实）：`{path, line_start, line_end, new_lines, staged}`。
+        self.dirty = tuple(dirty)
+        self.paths_forbidden = tuple(paths_forbidden)
+        self.notes = notes
+
+
+def _intent_scenarios() -> Tuple[IntentScenario, ...]:
+    """六条意图场景，覆盖三分法的每一条分支 + `exec` 变体 + 磁盘优先 + 非 Python（R4）。"""
+    return (
+        IntentScenario(
+            ident="intent_edit_exact",
+            types=("intent_precision",),
+            reason="unique_anchor_exact",
+            sides=(
+                IntentSide(
+                    "sess-radar-0020", SOURCE_CLAUDE, "feat/agent-a",
+                    ops=(IntentOp("Edit", "src/alpha.py", 2, 2, ("    a = 101",)),),
+                    noise_tool="Read",
+                ),
+            ),
+            paths_forbidden=("src/beta.py", "src/filler.py"),
+            notes="唯一锚点 → exact；同一条会话里的 `Read`（非写工具）**不得**产出条目"
+            "（负例与正例在同一份日志里，判据才不会靠'整个文件没有写操作'蒙对）。",
+        ),
+        IntentScenario(
+            ident="intent_replace_all_coarse",
+            types=("intent_precision",),
+            reason="replace_all_has_no_exact_range",
+            sides=(
+                IntentSide(
+                    "sess-radar-0021", SOURCE_CLAUDE, "feat/agent-a",
+                    ops=(IntentOp("Edit", "src/dup.py", 2, 3, ("    value = 2", "    return value"),
+                                  replace_all=True),),
+                ),
+            ),
+            notes="`replace_all=True` 语义上是「全部命中」：即使锚点唯一也**不给区间**，落 coarse。"
+            "给它一个精确区间就是编一个'看起来精确'的数字。",
+        ),
+        IntentScenario(
+            ident="intent_ambiguous_anchor_coarse",
+            types=("intent_precision",),
+            reason="anchor_hits_twice_must_degrade",
+            sides=(
+                IntentSide(
+                    "sess-radar-0022", SOURCE_CLAUDE, "feat/agent-a",
+                    ops=(IntentOp("Edit", "src/dup.py", 2, 3, ("    value = 3", "    return value")),),
+                ),
+            ),
+            notes="同一段 2 行在 `src/dup.py` 里出现两次（2–3 与 7–8 行）→ **必须显式降级**，"
+            "不许挑第一个命中当真值。真值里登记命中次数 2。",
+        ),
+        IntentScenario(
+            ident="intent_multi_edit_unknown",
+            types=("intent_precision",),
+            reason="multi_edit_absent_from_local_scan",
+            sides=(
+                IntentSide(
+                    "sess-radar-0023", SOURCE_CLAUDE, "feat/agent-a",
+                    ops=(
+                        IntentOp("MultiEdit", "src/alpha.py"),
+                        IntentOp("Edit", "src/alpha.py", 9, 9, ("    j = 308",)),
+                    ),
+                ),
+            ),
+            notes="`MultiEdit` 本机 0 次出现（R3）→ 落 unknown + 计注记，**不假装支持**；"
+            "同一会话的另一条 `Edit` 仍要精确落点——两条分支互不吞并。",
+        ),
+        IntentScenario(
+            ident="intent_codex_exec_patch",
+            types=("intent_precision",),
+            reason="codex_exec_variant_is_recognized",
+            sides=(
+                IntentSide(
+                    "sess-radar-0024", SOURCE_CODEX, "feat/agent-b",
+                    ops=(IntentOp("apply_patch", "src/beta.py", 3, 3, ("    total = value + 11",), via="exec"),),
+                ),
+            ),
+            notes="R2 的第二形态：patch 经 `exec` 下发（`name == \"exec\"`、`input` 是 shell 文本里嵌的"
+            "patch）。同一文件里另有一条**不含 patch 标记**的 `exec` 调用（反例）→ 不得被认成写操作。",
+        ),
+        IntentScenario(
+            ident="intent_write_and_non_python",
+            types=("intent_precision", "non_python_approximate"),
+            reason="write_effective_range_and_r4_approximate",
+            sides=(
+                IntentSide(
+                    "sess-radar-0025", SOURCE_CLAUDE, "feat/agent-a",
+                    ops=(
+                        # 整文件 Write：有效改动只有第 2 行（逐行比对基线得出），不是"整个文件都算改动"。
+                        IntentOp("Write", "src/alpha.py", 2, 2, ("    a = 100",)),
+                        IntentOp("Edit", "docs/notes.md", 3, 3, ("line two changed",)),
+                    ),
+                ),
+            ),
+            notes="`Write` 整文件覆盖 → 有效改动区间由**逐行比对基线**得出（只改了第 2 行）；"
+            "`docs/notes.md` 非 Python → 行区间照给但 `approximate=True`（R4 闭环口径），"
+            "产物里**不出现任何符号字段**。",
+        ),
+        IntentScenario(
+            ident="intent_multi_write_merge",
+            types=("intent_precision",),
+            reason="same_session_same_file_writes_are_merged",
+            sides=(
+                IntentSide(
+                    "sess-radar-0027", SOURCE_CLAUDE, "feat/agent-a",
+                    ops=(
+                        IntentOp("Edit", "src/alpha.py", 2, 2, ("    a = 701",)),
+                        IntentOp("Edit", "src/alpha.py", 9, 9, ("    j = 709",)),
+                    ),
+                ),
+            ),
+            notes="同一会话在同一文件上的**两次**写入 → 合并成一条 WriteRecord（区间取并集、"
+            "`last_write_ts` 取组内**最大**值）；`write_ops == 2` 而 `entries == 1`——"
+            "两个计数口径分开登记（K12）。没有磁盘改动，所以落点来自会话侧。",
+        ),
+        IntentScenario(
+            ident="intent_disk_wins",
+            types=("intent_precision",),
+            reason="disk_is_the_fact",
+            sides=(
+                IntentSide(
+                    "sess-radar-0026", SOURCE_CLAUDE, "feat/agent-a",
+                    ops=(IntentOp("Edit", "src/alpha.py", 2, 2, ("    a = 601",)),),
+                ),
+            ),
+            dirty=(
+                {"path": "src/alpha.py", "line_start": 9, "line_end": 9, "new_lines": ("    j = 609",), "staged": True},
+                {"path": "src/beta.py", "line_start": 3, "line_end": 3, "new_lines": ("    total = value + 31",), "staged": False},
+            ),
+            notes="磁盘与会话不一致（会话说第 2 行、磁盘说第 9 行）→ **以磁盘为准**，"
+            "并在产物里点名 `disk_and_session_disagree`；`src/beta.py` 只有磁盘改动、没有会话来源"
+            "（`entries_without_session` 的实物）。两条改动一条 staged、一条 unstaged，"
+            "分别走 `git diff --cached` 与 `git diff`。",
+        ),
+    )
+
+
+def intent_scenario_ids() -> Tuple[str, ...]:
+    return tuple(scenario.ident for scenario in _intent_scenarios())
+
+
+def intent_scenario_by_id(ident: str) -> IntentScenario:
+    for scenario in _intent_scenarios():
+        if scenario.ident == ident:
+            return scenario
+    raise KeyError("未知意图场景 id：%r（已知：%s）" % (ident, list(intent_scenario_ids())))
+
+
+def _intent_op_lines(op: IntentOp, base_lines: Sequence[str]):
+    """把一条写操作声明解成 `(old_lines, new_lines, changed_range)`（**声明即校验**）。"""
+    if op.missing_path:
+        return (), (), None
+    base = list(base_lines)
+    if op.tool == "MultiEdit":
+        # 本机 0 次出现：连字段形态都不编——只声明"它出现在这个文件上"，期望落 unknown。
+        return (), (), None
+    if op.tool == "Write":
+        if op.write_content is not None:
+            candidate = list(op.write_content)
+        else:
+            candidate = list(base)
+            candidate[op.line_start - 1:op.line_end] = list(op.new_lines)
+        changed = _changed_range(base, candidate)
+        return tuple(base[changed[0] - 1:changed[1]]), tuple(candidate[changed[0] - 1:changed[1]]), changed
+    start, end = op.line_start, op.line_end
+    if start is None or end is None:
+        return (), (), None
+    old_lines = tuple(base[start - 1:end])
+    if len(old_lines) != end - start + 1:
+        raise AssertionError("意图场景的改动区间越界：%s %r" % (op.path, (start, end)))
+    changed = _changed_range(base, base[: start - 1] + list(op.new_lines) + base[end:])
+    return old_lines, tuple(op.new_lines), changed
+
+
+def _count_anchor_hits(base_lines: Sequence[str], anchor: Sequence[str]) -> int:
+    """**生成侧独立实现**（K10）：数锚点在基线里的命中次数，不 import 生产侧的 `intent.py`。"""
+    if not anchor:
+        return 0
+    hits = 0
+    span = len(anchor)
+    for index in range(len(base_lines) - span + 1):
+        if list(base_lines[index:index + span]) == list(anchor):
+            hits += 1
+    return hits
+
+
+def _intent_expectation(op: IntentOp, base_lines: Sequence[str]):
+    """按**规则表**推出期望（与引擎无关）：`(precision, ranges, reasons, approximate, path)`。"""
+    if op.missing_path or op.tool == "MultiEdit":
+        return "unknown", [], (["multi_edit_unsupported"] if op.tool == "MultiEdit" else ["missing_file_path"]), True, ""
+    old_lines, _new_lines, changed = _intent_op_lines(op, base_lines)
+    if op.replace_all:
+        return "coarse", [], ["replace_all"], not op.path.endswith(".py"), op.path
+    hits = _count_anchor_hits(base_lines, old_lines) if op.tool == "Edit" else 1
+    if hits == 0:
+        return "coarse", [], ["anchor_not_found"], not op.path.endswith(".py"), op.path
+    if hits > 1:
+        return "coarse", [], ["anchor_ambiguous#%d" % hits], not op.path.endswith(".py"), op.path
+    return "exact", [list(changed)], [], not op.path.endswith(".py"), op.path
+
+
+def _worst_precision(values) -> str:
+    """生成侧独立实现：取最弱的一档（不 import 生产侧）。"""
+    order = ("exact", "coarse", "unknown")
+    if not values:
+        return "exact"
+    return max(values, key=order.index)
+
+
+def build_intent_truth(scenario: IntentScenario) -> Dict[str, Any]:
+    """构造意图真值：**只存输入与期望**（K9），期望值由基线与规则表推出。
+
+    真值分两块登记（对应 K12"条目数 vs 记录数"的口径）：
+    * `entries_expected`：**有路径**的条目，按 `(会话, 路径)` **合并后**逐条登记（与生产侧同一套聚合口径）；
+    * `unknown_expected`：未定位到文件的写操作（一个会话的多次未定位写操作合并成**一条** unknown 条目）。
+    """
+    repo_files = _intent_repo_files()
+    geometry_ops: List[Dict[str, Any]] = []
+    buckets: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    unknown_reasons: List[str] = []
+    unknown_ops = 0
+    unknown_sessions = set()
+    unknown_ts: Dict[str, str] = {}
+    order: List[Tuple[str, str]] = []
+    for side in scenario.sides:
+        for index, op in enumerate(side.ops):
+            # 会话行的分钟偏移由渲染器决定（`base + 1 + op 序号`）：期望的 `last_write_ts` 必须与
+            # 渲染器**同一套算法**推出，否则真值就是在"猜时间戳"。
+            ts = _stamp(side.start_minute + 1 + index)
+            base_lines = repo_files[op.path]
+            old_lines, new_lines, changed = _intent_op_lines(op, base_lines)
+            precision, ranges, reasons, approximate, path = _intent_expectation(op, base_lines)
+            geometry_ops.append(
+                {
+                    "session": side.session_id,
+                    "source": side.source,
+                    "tool": op.tool,
+                    "via": op.via,
+                    "path": op.path,
+                    "timestamp": ts,
+                    "anchor": list(old_lines),
+                    "replacement": list(new_lines),
+                    "changed": list(changed) if changed else None,
+                    "replace_all": op.replace_all,
+                    "missing_path": op.missing_path,
+                    "anchor_hits": _count_anchor_hits(base_lines, old_lines) if old_lines else 0,
+                }
+            )
+            if precision == "unknown":
+                unknown_ops += 1
+                unknown_sessions.add(side.session_id)
+                unknown_ts[side.session_id] = max(unknown_ts.get(side.session_id, ""), ts)
+                for code in reasons:
+                    if code not in unknown_reasons:
+                        unknown_reasons.append(code)
+                continue
+            key = (side.session_id, path)
+            if key not in buckets:
+                buckets[key] = {
+                    "path": path,
+                    "session": "%s:%s.jsonl" % (side.source, side.session_id),
+                    "session_id": side.session_id,
+                    "precisions": [],
+                    "changed_ranges": [],
+                    "reasons": [],
+                    "approximate": approximate,
+                    "last_write_ts": "",
+                }
+                order.append(key)
+            bucket = buckets[key]
+            bucket["precisions"].append(precision)
+            for pair in ranges:
+                if pair not in bucket["changed_ranges"]:
+                    bucket["changed_ranges"].append(pair)
+            for code in reasons:
+                if code not in bucket["reasons"]:
+                    bucket["reasons"].append(code)
+            bucket["approximate"] = bucket["approximate"] or approximate
+            # 同会话同文件多次写入按时间序合并 → `last_write_ts` 取组内**最大**（M2 DoD）。
+            bucket["last_write_ts"] = max(bucket["last_write_ts"], ts)
+
+    entries: List[Dict[str, Any]] = []
+    for key in order:
+        bucket = buckets[key]
+        precision = _worst_precision(bucket["precisions"])
+        entries.append(
+            {
+                "path": bucket["path"],
+                "session": bucket["session"],
+                "session_id": bucket["session_id"],
+                "precision": precision,
+                "changed_ranges": sorted(bucket["changed_ranges"]),
+                "ranges_source": "session" if precision == "exact" else "none",
+                "approximate": bucket["approximate"],
+                "reasons": list(bucket["reasons"]),
+                "last_write_ts": bucket["last_write_ts"],
+                "write_ops": len(bucket["precisions"]),
+            }
+        )
+
+    dirty_geometry = []
+    for item in scenario.dirty:
+        base_lines = repo_files[item["path"]]
+        start, end = item["line_start"], item["line_end"]
+        dirty_geometry.append(
+            {
+                "path": item["path"],
+                "changed": [start, end],
+                "old": list(base_lines[start - 1:end]),
+                "replacement": list(item["new_lines"]),
+                "staged": bool(item["staged"]),
+            }
+        )
+
+    # 磁盘优先（`plan/04` M2 步骤 3）：有未提交改动的路径，条目区间来自磁盘；
+    # 与会话区间不同时点名 `disk_and_session_disagree`（"以磁盘为准"不能变成"悄悄改数字"）。
+    session_ranges_by_key = dict(
+        ((item["path"], item["session_id"]), list(item["changed_ranges"]))
+        for item in entries
+        if item["session_id"]
+    )
+    for item in dirty_geometry:
+        path = item["path"]
+        ranges = [item["changed"]]
+        matched = [entry for entry in entries if entry["path"] == path and entry["session_id"]]
+        if not matched:
+            entries.append(
+                {
+                    "path": path,
+                    "session": None,
+                    "session_id": None,
+                    "precision": "exact",
+                    "changed_ranges": ranges,
+                    "ranges_source": "disk",
+                    "approximate": not path.endswith(".py"),
+                    "reasons": [],
+                    # 只有磁盘来源的改动没有"会话最后写入时间"可给：空串是**如实**的表达。
+                    "last_write_ts": "",
+                    "write_ops": 0,
+                }
+            )
+            continue
+        for entry in matched:
+            session_ranges = session_ranges_by_key.get((path, entry["session_id"]), [])
+            entry["precision"] = "exact"
+            entry["changed_ranges"] = ranges
+            entry["ranges_source"] = "disk"
+            if session_ranges and session_ranges != ranges:
+                entry["reasons"] = sorted(set(entry["reasons"]) | {"disk_and_session_disagree"})
+            else:
+                entry["reasons"] = sorted(set(entry["reasons"]) - {"disk_and_session_disagree"})
+
+    entries.sort(key=lambda item: (item["path"], item["session_id"] or "", item["precision"]))
+    counts = {
+        "entries": len(entries) + len(unknown_sessions),
+        "exact": sum(1 for item in entries if item["precision"] == "exact"),
+        "coarse": sum(1 for item in entries if item["precision"] == "coarse"),
+        "unknown": len(unknown_sessions),
+        "unknown_write_ops": unknown_ops,
+        "multi_edit_ops": sum(1 for item in geometry_ops if item["tool"] == "MultiEdit"),
+        "write_ops": len(geometry_ops),
+        "entries_without_session": sum(1 for item in entries if item["session_id"] is None),
+        "non_python_entries": sum(1 for item in entries if item["approximate"]),
+    }
+    return {
+        "scenario": scenario.ident,
+        "types": sorted(scenario.types),
+        "reason": scenario.reason,
+        "entries_expected": entries,
+        "unknown_expected": {
+            "ops": unknown_ops,
+            "entries": len(unknown_sessions),
+            "reasons": sorted(unknown_reasons),
+            "last_write_ts": sorted(value for value in unknown_ts.values() if value),
+        },
+        "paths_forbidden": list(scenario.paths_forbidden),
+        "counts_expected": counts,
+        "geometry": {
+            "coord": "1-based 闭区间行号（相对 repo/ 根）；changed = 与基线逐行比对得出的有效改动区间",
+            "ops": geometry_ops,
+            "dirty": dirty_geometry,
+            "baseline": {path: len(lines) for path, lines in sorted(repo_files.items())},
+            "recompute": (
+                "把 intent 引擎注释掉也能算出期望：读 repo/ 原文 → 锚点命中次数（0/1/多）决定 "
+                "coarse/exact；replace_all 一律 coarse；MultiEdit 与缺 file_path 一律 unknown；"
+                "非 .py 文件 approximate=True；有未提交改动的路径区间取磁盘 hunk（dirty 声明）"
+                "并在与会话区间不同时点名 disk_and_session_disagree。"
+            ),
+        },
+        "notes": scenario.notes,
+    }
+
+
+# --------------------------------------------------------------------------------------
 # 序列化（**生成侧独立实现**，K10）
 # --------------------------------------------------------------------------------------
 
@@ -711,6 +1209,174 @@ def _join_jsonl(records) -> str:
     return "".join(_dump_jsonl_line(record) + "\n" for record in records)
 
 
+def _intent_claude_lines(side: IntentSide, ops, repo_files, root: str) -> List[Dict[str, Any]]:
+    """仿 Claude 会话行（含 `MultiEdit` / 缺 `file_path` 两种降级形态 + 一条非写工具反例）。"""
+    base = side.start_minute
+    common = {
+        "sessionId": side.session_id,
+        "cwd": root,
+        "gitBranch": side.branch or "",
+        "isSidechain": False,
+    }
+    lines: List[Dict[str, Any]] = []
+    head = dict(common)
+    head.update({"type": "last-prompt", "uuid": "%s-lp" % side.session_id, "timestamp": _stamp(base)})
+    lines.append(head)
+
+    minute = base + 1
+    tool_index = 0
+    for op in ops:
+        if op.missing_path:
+            tool_input = {"old_string": "x", "new_string": "y"}
+        elif op.tool == "MultiEdit":
+            # 本机 0 次出现 → 字段形态**不编**：只给 `file_path`（与"出现即 unknown"的处置一致）。
+            tool_input = {"file_path": "%s/%s" % (root, op.path)}
+        elif op.tool == "Write":
+            if op.write_content is not None:
+                content = "\n".join(op.write_content) + "\n"
+            else:
+                base_lines = list(repo_files[op.path])
+                base_lines[op.line_start - 1:op.line_end] = list(op.new_lines)
+                content = "\n".join(base_lines) + "\n"
+            tool_input = {"file_path": "%s/%s" % (root, op.path), "content": content}
+        else:
+            old_lines = repo_files[op.path][op.line_start - 1:op.line_end]
+            tool_input = {
+                "file_path": "%s/%s" % (root, op.path),
+                "old_string": "\n".join(old_lines),
+                "new_string": "\n".join(op.new_lines),
+                "replace_all": op.replace_all,
+            }
+        record = dict(common)
+        record.update(
+            {
+                "type": "assistant",
+                "uuid": "%s-msg-%d" % (side.session_id, tool_index),
+                "timestamp": _stamp(minute),
+                "message": {
+                    "id": "msg-%s-%d" % (side.session_id, tool_index),
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "toolu-%s-%d" % (side.session_id, tool_index),
+                            "name": op.tool,
+                            "input": tool_input,
+                        }
+                    ],
+                },
+            }
+        )
+        lines.append(record)
+        minute += 1
+        tool_index += 1
+
+    if side.noise_tool:
+        # 反例：非写工具（`Read` / 普通 `exec`）**不得**产出条目。它与正例在同一份日志里，
+        # 判据才不会靠"整个文件没有写操作"蒙对。
+        noise_input = {"file_path": "%s/src/alpha.py" % root} if side.noise_tool == "Read" else {"input": "ls -la"}
+        record = dict(common)
+        record.update(
+            {
+                "type": "assistant",
+                "uuid": "%s-noise" % side.session_id,
+                "timestamp": _stamp(minute),
+                "message": {
+                    "id": "msg-%s-noise" % side.session_id,
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "toolu-%s-noise" % side.session_id,
+                            "name": side.noise_tool,
+                            "input": noise_input,
+                        }
+                    ],
+                },
+            }
+        )
+        lines.append(record)
+        minute += 1
+
+    tail = dict(common)
+    tail.update({"type": "queue-operation", "uuid": "%s-qo" % side.session_id, "timestamp": _stamp(base + 9)})
+    lines.append(tail)
+    return lines
+
+
+def _intent_patch_text(ops, repo_files, root: str) -> str:
+    """Codex 侧 patch 文本（`*** Update File:` 指令行 + `-`/`+` hunk）。"""
+    chunks = ["*** Begin Patch"]
+    for op in ops:
+        chunks.append("*** Update File: %s/%s" % (root, op.path))
+        chunks.append("@@")
+        for line in repo_files[op.path][op.line_start - 1:op.line_end]:
+            chunks.append("-%s" % line)
+        for line in op.new_lines:
+            chunks.append("+%s" % line)
+    chunks.append("*** End Patch")
+    chunks.append("")
+    return "\n".join(chunks)
+
+
+def _intent_codex_lines(side: IntentSide, ops, repo_files, root: str) -> List[Dict[str, Any]]:
+    """仿 Codex 会话行：首行 `session_meta`，patch 按 `via` 落在 `custom_tool_call` 或 `exec` 上。"""
+    base = side.start_minute
+    payload = {
+        "id": side.session_id,
+        "timestamp": _stamp(base),
+        "cwd": root,
+        "originator": "codex_cli",
+        "cli_version": "0.0.0-synthetic",
+        "thread_source": "user",
+        "session_id": side.session_id,
+    }
+    lines: List[Dict[str, Any]] = [{"timestamp": _stamp(base), "type": "session_meta", "payload": payload}]
+    minute = base + 1
+    patch_ops = [op for op in ops if op.tool != "MultiEdit" and not op.missing_path]
+    if patch_ops:
+        text = _intent_patch_text(patch_ops, repo_files, root)
+        via = patch_ops[0].via
+        if via == "exec":
+            # R2 的第二形态：patch 经 `exec` 以 shell 文本下发，标记同形。
+            body = {"type": "custom_tool_call", "name": "exec",
+                    "input": "apply_patch <<'EOF'\n%sEOF\n" % text}
+        else:
+            body = {"type": "custom_tool_call", "name": "apply_patch", "input": text}
+        lines.append({"timestamp": _stamp(minute), "type": "response_item", "payload": body})
+        minute += 1
+    if side.noise_tool:
+        # 反例：`exec` 载荷里**没有** patch 标记 → 不得被认成写操作。
+        lines.append(
+            {
+                "timestamp": _stamp(minute),
+                "type": "response_item",
+                "payload": {"type": "custom_tool_call", "name": side.noise_tool, "input": "ls -la\n"},
+            }
+        )
+        minute += 1
+    lines.append({"timestamp": _stamp(minute), "type": "event_msg", "payload": {"type": "token_count"}})
+    return lines
+
+
+def _render_intent_session_texts(scenario: IntentScenario, root: str) -> Dict[str, str]:
+    """渲染某意图场景的全部会话文件：`{相对 sessions/ 的 posix 路径: 文本}`。"""
+    repo_files = _intent_repo_files()
+    texts: Dict[str, str] = {}
+    for side in scenario.sides:
+        ops = list(side.ops)
+        if side.source == SOURCE_CLAUDE:
+            rendered = _intent_claude_lines(side, ops, repo_files, root)
+        else:
+            rendered = _intent_codex_lines(side, ops, repo_files, root)
+        texts["%s/%s.jsonl" % (side.source, side.session_id)] = _join_jsonl(rendered)
+    return texts
+
+
+def intent_session_roots(scenario: IntentScenario) -> Tuple[str, ...]:
+    return tuple(sorted({side.source for side in scenario.sides}))
+
+
 def session_roots(scenario: Scenario) -> Tuple[str, ...]:
     """该场景出现的会话源目录名（物化与 `--check` 共用）。"""
     sources = {side.source for side in scenario.sides}
@@ -854,6 +1520,20 @@ def _build_scenario_artifacts(scenario: Scenario) -> Dict[str, str]:
     return artifacts
 
 
+def _intent_repo_file_texts() -> Dict[str, str]:
+    return {path: "\n".join(lines) + "\n" for path, lines in sorted(_intent_repo_files().items())}
+
+
+def _build_intent_artifacts(scenario: IntentScenario) -> Dict[str, str]:
+    """某意图场景的全部冻结文本（相对 `<bench>/intents/<id>/` 的 posix 路径 → 文本）。"""
+    artifacts: Dict[str, str] = {}
+    for path, text in _intent_repo_file_texts().items():
+        artifacts["%s/%s" % (INTENT_REPO_DIRNAME, path)] = text
+    for path, text in _render_intent_session_texts(scenario, PLACEHOLDER_ROOT).items():
+        artifacts["%s/%s" % (INTENT_SESSIONS_DIRNAME, path)] = text
+    return artifacts
+
+
 def build_manifest(scenario_entries: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     """覆盖度台账（`plan/05` §五）：每类最低条数 + **集合覆盖** + 显式 `missing_types`。"""
     count_by_type: Dict[str, int] = {}
@@ -877,11 +1557,33 @@ def build_manifest(scenario_entries: Sequence[Dict[str, Any]]) -> Dict[str, Any]
     }
 
 
+def build_intent_manifest(entries: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """意图矩阵的覆盖度台账（与 M1 的冲突矩阵分开登记，判据不互相放宽）。"""
+    count_by_type: Dict[str, int] = {}
+    for entry in entries:
+        for type_name in entry["types"]:
+            count_by_type[type_name] = count_by_type.get(type_name, 0) + 1
+    missing_types = sorted(
+        name for name in MIN_INTENT_COUNT_BY_TYPE if count_by_type.get(name, 0) < MIN_INTENT_COUNT_BY_TYPE[name]
+    )
+    return {
+        "generator_version": GENERATOR_VERSION,
+        "coverage": {
+            "min_count_by_type": dict(MIN_INTENT_COUNT_BY_TYPE),
+            "count_by_type": count_by_type,
+            "missing_types": missing_types,
+            "counting_unit": "用例条目数（一个 intent case 一条），不是命中记录数（K12 的口径声明）",
+            "sampling_notice": "抽样覆盖非穷举：本矩阵声明的是「三分法每条分支至少一条 + 集合覆盖」。",
+        },
+        "scenarios": list(entries),
+    }
+
+
 def write_frozen(dest: str) -> Dict[str, Any]:
     """把整棵冻结树写到 `dest`（`--out`）。
 
     先建到临时目录再落 `dest`：中途失败不会留下半棵树。落盘前会清掉 `dest` 下**我们自己的**
-    `scenarios/` 与 `manifest.json`（只动这两处，绝不碰其他文件），避免陈旧产物混进新树。
+    `scenarios/` / `intents/` / `manifest.json`（只动这三处，绝不碰其他文件），避免陈旧产物混进新树。
     """
     dest = os.path.abspath(dest)
     parent = os.path.dirname(dest)
@@ -922,6 +1624,37 @@ def write_frozen(dest: str) -> Dict[str, Any]:
         manifest = build_manifest(scenario_entries)
         _write_text(os.path.join(staging, MANIFEST_FILENAME), _dump_json(manifest))
 
+        intent_entries = []
+        for intent_scenario in _intent_scenarios():
+            idir = os.path.join(staging, INTENTS_DIRNAME, intent_scenario.ident)
+            for rel, text in _build_intent_artifacts(intent_scenario).items():
+                _write_text(os.path.join(idir, rel), text)
+            intent_shas = materialize_intent_scenario(
+                intent_scenario, os.path.join(work, INTENTS_DIRNAME, intent_scenario.ident)
+            )
+            truth = build_intent_truth(intent_scenario)
+            truth["repo_shas"] = intent_shas
+            truth["session_roots"] = list(intent_session_roots(intent_scenario))
+            truth_text = _dump_json(truth)
+            _write_text(os.path.join(idir, INTENT_TRUTH_FILENAME), truth_text)
+            intent_entries.append(
+                {
+                    "id": intent_scenario.ident,
+                    "types": sorted(intent_scenario.types),
+                    "reason": intent_scenario.reason,
+                    "sessions": [
+                        "%s:%s.jsonl" % (side.source, side.session_id) for side in intent_scenario.sides
+                    ],
+                    "cases": [
+                        {"case_id": intent_scenario.ident, "truth_sha256": _sha256_text(truth_text)}
+                    ],
+                    "truth_sha256": _sha256_text(truth_text),
+                    "repo_shas": intent_shas,
+                }
+            )
+        intent_manifest = build_intent_manifest(intent_entries)
+        _write_text(os.path.join(staging, INTENTS_DIRNAME, MANIFEST_FILENAME), _dump_json(intent_manifest))
+
         if os.path.isdir(dest):
             _clear_own_products(dest)
         else:
@@ -942,10 +1675,11 @@ def _write_text(path: str, text: str) -> str:
 
 
 def _clear_own_products(dest: str) -> None:
-    """只清 `scenarios/` 与 `manifest.json`——生成器的产物面，其他文件一律不动。"""
-    scenarios_root = os.path.join(dest, SCENARIOS_DIRNAME)
-    if os.path.isdir(scenarios_root):
-        shutil.rmtree(scenarios_root)
+    """只清 `scenarios/` / `intents/` / `manifest.json`——生成器的产物面，其他文件一律不动。"""
+    for dirname in (SCENARIOS_DIRNAME, INTENTS_DIRNAME):
+        root = os.path.join(dest, dirname)
+        if os.path.isdir(root):
+            _rmtree(root)
     manifest_path = os.path.join(dest, MANIFEST_FILENAME)
     if os.path.isfile(manifest_path):
         os.remove(manifest_path)
@@ -1067,6 +1801,53 @@ def _commit_all(repo_dir: str, message: str, iso_date: str) -> None:
     )
 
 
+def materialize_intent_scenario(scenario: IntentScenario, dest: str) -> Dict[str, Any]:
+    """把意图场景物化成 `dest/repo`（真 git 仓库）+ `dest/sessions/<source>/`（真会话日志）。
+
+    与 M1 的 `materialize_scenario` 有两处**故意不同**：
+
+    * **不建分支**：M2 的输入是"会话 + 工作区未提交改动"，不是"两条已提交分支"。
+      所以这里只留 `main` 上的基线提交，改动落在**工作区**（`dirty` 声明）。
+    * **staged / unstaged 分开放**：`dirty[*].staged` 决定改动进索引还是只进工作区，
+      让 `git diff` 与 `git diff --cached` **两条通路都真跑一次**（少验一条就是少一半覆盖）。
+    """
+    dest = os.path.abspath(dest)
+    repo_dir = os.path.join(dest, INTENT_REPO_DIRNAME)
+    _rmtree(repo_dir)
+    os.makedirs(repo_dir)
+    repo_files = _intent_repo_files()
+    for path, lines in sorted(repo_files.items()):
+        _write_text(os.path.join(repo_dir, path), "\n".join(lines) + "\n")
+
+    _run_git(["init", "--quiet"], repo_dir)
+    _commit_all(repo_dir, "base: synthetic demo repository", _GIT_DATE_BASE)
+    base_commit = _run_git(["rev-parse", "HEAD"], repo_dir).strip()
+
+    staged: List[str] = []
+    unstaged: List[str] = []
+    for item in scenario.dirty:
+        lines = list(repo_files[item["path"]])
+        start, end = item["line_start"], item["line_end"]
+        lines[start - 1:end] = list(item["new_lines"])
+        _write_text(os.path.join(repo_dir, item["path"]), "\n".join(lines) + "\n")
+        if item["staged"]:
+            if item["path"] not in staged:
+                staged.append(item["path"])
+        elif item["path"] not in unstaged:
+            unstaged.append(item["path"])
+    if staged:
+        _run_git(["add", "--"] + staged, repo_dir)
+    for path in unstaged:
+        if path in staged:
+            raise AssertionError("同一路径不能既 staged 又 unstaged：%r（场景声明自相矛盾）" % path)
+
+    root = repo_dir.replace(os.sep, "/")
+    for rel, text in _render_intent_session_texts(scenario, root).items():
+        _write_text(os.path.join(dest, INTENT_SESSIONS_DIRNAME, rel), text)
+
+    return {"base_commit": base_commit, "branches": {}}
+
+
 def merge_tree_exit(repo_dir: str, branch_a: str, branch_b: str) -> int:
     """只读调用 `git merge-tree --write-tree`，返回退出码（0 自动合并成功 / 1 有冲突 / 128 环境问题）。"""
     completed = subprocess.run(
@@ -1087,7 +1868,7 @@ def merge_tree_exit(repo_dir: str, branch_a: str, branch_b: str) -> int:
 
 
 def check(bench_dir: str) -> List[str]:
-    """两层断言（K10）+ 提交可复算。返回失败项列表；空列表 = 全过。"""
+    """两层断言（K10）+ 提交可复算 + 意图矩阵（M2）。返回失败项列表；空列表 = 全过。"""
     bench_dir = os.path.abspath(bench_dir)
     manifest_path = os.path.join(bench_dir, MANIFEST_FILENAME)
     if not os.path.isfile(manifest_path):
@@ -1095,6 +1876,7 @@ def check(bench_dir: str) -> List[str]:
     manifest = json.loads(_read_text(manifest_path))
 
     failures = _check_shape(bench_dir, manifest)
+    failures.extend(_check_intent_shape(bench_dir))
 
     # ---- 层 2：重跑生成器到临时目录 → 与冻结产物逐字节比对 ----
     staging = tempfile.mkdtemp(prefix="radar-bench-recheck-")
@@ -1128,8 +1910,207 @@ def check(bench_dir: str) -> List[str]:
                         "「git 会不会自己报冲突」这一事实上，实测不符必须改真值（不许改声明）"
                         % (scenario.ident, actual, expected)
                     )
+        for intent_scenario in _intent_scenarios():
+            truth_path = os.path.join(
+                bench_dir, INTENTS_DIRNAME, intent_scenario.ident, INTENT_TRUTH_FILENAME
+            )
+            if not os.path.isfile(truth_path):
+                continue
+            truth = json.loads(_read_text(truth_path))
+            shas = materialize_intent_scenario(
+                intent_scenario, os.path.join(work, INTENTS_DIRNAME, intent_scenario.ident)
+            )
+            if truth.get("repo_shas") != shas:
+                failures.append(
+                    "意图场景 %s 的提交 sha 复算不一致：真值 %r ≠ 本次物化 %r"
+                    % (intent_scenario.ident, truth.get("repo_shas"), shas)
+                )
+            failures.extend(
+                _check_intent_worktree(
+                    intent_scenario, os.path.join(work, INTENTS_DIRNAME, intent_scenario.ident)
+                )
+            )
     finally:
         shutil.rmtree(work, ignore_errors=True)
+    return failures
+
+
+def _check_intent_worktree(scenario: IntentScenario, dest: str) -> List[str]:
+    """**现场复核** `dirty` 声明真的落成了"未提交改动"（staged / unstaged 两条通路各验一次）。
+
+    为什么要现场跑：真值里的区间期望建立在"磁盘上确实有这么一块改动"这一事实上。
+    如果物化没把改动写进去（或写进了索引却没进工作区），期望值就是空中楼阁，
+    而 `--check` 只看冻结文本永远发现不了。
+    """
+    repo_dir = os.path.join(dest, INTENT_REPO_DIRNAME)
+    failures: List[str] = []
+    unstaged = _run_git(["diff", "--name-only", "-U0"], repo_dir).strip().split("\n")
+    staged = _run_git(["diff", "--cached", "--name-only", "-U0"], repo_dir).strip().split("\n")
+    unstaged = [item for item in unstaged if item]
+    staged = [item for item in staged if item]
+    for item in scenario.dirty:
+        target = staged if item["staged"] else unstaged
+        if item["path"] not in target:
+            failures.append(
+                "意图场景 %s 的声明改动 %s 未出现在 %s 里（物化与真值不一致）"
+                % (scenario.ident, item["path"], "索引" if item["staged"] else "工作区")
+            )
+    return failures
+
+
+def _check_intent_shape(bench_dir: str) -> List[str]:
+    """意图矩阵的层 1 断言：真值 schema / 无 `observed_*` / 计数恒等 / 覆盖度 / 反向样例。"""
+    failures: List[str] = []
+    root = os.path.join(bench_dir, INTENTS_DIRNAME)
+    manifest_path = os.path.join(root, MANIFEST_FILENAME)
+    if not os.path.isfile(manifest_path):
+        failures.append("意图矩阵台账缺失：%s（先跑 --out 重建）" % manifest_path)
+        return failures
+    manifest = json.loads(_read_text(manifest_path))
+    if manifest.get("generator_version") != GENERATOR_VERSION:
+        failures.append(
+            "intents/manifest.json 的 generator_version=%r 与包内常量 %r 不一致（台账被手改过？）"
+            % (manifest.get("generator_version"), GENERATOR_VERSION)
+        )
+    entries = {entry.get("id"): entry for entry in manifest.get("scenarios", [])}
+    expected_ids = list(intent_scenario_ids())
+    if sorted(entries) != sorted(expected_ids):
+        failures.append(
+            "意图台账的场景集合与生成器不一致：%s ≠ %s" % (sorted(entries), sorted(expected_ids))
+        )
+
+    count_by_type: Dict[str, int] = {}
+    for ident in expected_ids:
+        truth_path = os.path.join(root, ident, INTENT_TRUTH_FILENAME)
+        if not os.path.isfile(truth_path):
+            failures.append("意图场景 %s 缺少真值文件：%s" % (ident, truth_path))
+            continue
+        text = _read_text(truth_path)
+        truth = json.loads(text)
+        for type_name in truth.get("types", []):
+            count_by_type[type_name] = count_by_type.get(type_name, 0) + 1
+        entry = entries.get(ident)
+        if entry is not None:
+            digest = _sha256_text(text)
+            if entry.get("truth_sha256") != digest:
+                failures.append("意图场景 %s 的 truth_sha256 与台账不一致（台账禁手改）" % ident)
+        failures.extend(_check_intent_payload(ident, truth, root))
+
+    coverage = manifest.get("coverage", {})
+    if coverage.get("count_by_type") != count_by_type:
+        failures.append(
+            "意图覆盖度计数不一致：台账 %r ≠ 实算 %r（计数口径 = 用例条目数，K12）"
+            % (coverage.get("count_by_type"), count_by_type)
+        )
+    min_counts = coverage.get("min_count_by_type", {})
+    short = sorted(name for name, minimum in min_counts.items() if count_by_type.get(name, 0) < minimum)
+    if short:
+        failures.append("意图覆盖度不达标（低于每类最低条数）：%s" % short)
+    if coverage.get("missing_types") != short:
+        failures.append(
+            "意图矩阵 missing_types 未如实登记：台账 %r ≠ 实算 %r" % (coverage.get("missing_types"), short)
+        )
+    return failures
+
+
+def _check_intent_payload(ident: str, truth: Dict[str, Any], root: str) -> List[str]:
+    """意图真值的自洽性：键齐 / 无 `observed_*` / 计数恒等 / 反向样例 / 区间落在基线内。"""
+    failures: List[str] = []
+    for key in (
+        "scenario",
+        "types",
+        "reason",
+        "entries_expected",
+        "unknown_expected",
+        "paths_forbidden",
+        "counts_expected",
+        "geometry",
+    ):
+        if key not in truth:
+            failures.append("意图场景 %s 的真值缺少键 %r" % (ident, key))
+    if truth.get("scenario") != ident:
+        failures.append("意图场景 %s 的真值里 scenario=%r 不自洽" % (ident, truth.get("scenario")))
+
+    for key_path in _walk_keys(truth):
+        if key_path.startswith("observed"):
+            failures.append(
+                "意图场景 %s 的真值出现 observed_* 字段（%s）：K9 禁止把观测写进真值" % (ident, key_path)
+            )
+
+    counts = truth.get("counts_expected", {})
+    partition = counts.get("exact", 0) + counts.get("coarse", 0) + counts.get("unknown", 0)
+    if partition != counts.get("entries"):
+        failures.append(
+            "意图场景 %s 的三分法计数不守恒：exact+coarse+unknown=%d ≠ entries=%r（集合划分必须恒等）"
+            % (ident, partition, counts.get("entries"))
+        )
+    if counts.get("unknown_write_ops", 0) < counts.get("unknown", 0):
+        failures.append(
+            "意图场景 %s 的 unknown_write_ops=%r 小于 unknown 条目数=%r（前者是写操作条数，不可能更少）"
+            % (ident, counts.get("unknown_write_ops"), counts.get("unknown"))
+        )
+
+    entries = truth.get("entries_expected", [])
+    for item in entries:
+        precision = item.get("precision")
+        ranges = item.get("changed_ranges", [])
+        if precision == "exact" and not ranges:
+            failures.append(
+                "意图场景 %s 的 %r 标了 exact 却没有区间：exact 必须有可复算的区间"
+                % (ident, item.get("path"))
+            )
+        if precision == "coarse" and ranges:
+            failures.append(
+                "意图场景 %s 的 %r 标了 coarse 却给了区间：coarse 不许编「看起来精确」的区间"
+                % (ident, item.get("path"))
+            )
+        for pair in ranges:
+            if not (isinstance(pair, list) and len(pair) == 2 and 1 <= pair[0] <= pair[1]):
+                failures.append("意图场景 %s 的 %r 区间形态非法：%r" % (ident, item.get("path"), pair))
+        if item.get("path", "").endswith(".py") and item.get("approximate"):
+            failures.append(
+                "意图场景 %s 的 Python 文件 %r 被标成 approximate（R4 只对非 Python 生效）"
+                % (ident, item.get("path"))
+            )
+        if not item.get("path", "").endswith(".py") and not item.get("approximate"):
+            failures.append(
+                "意图场景 %s 的非 Python 文件 %r 未标 approximate=True（R4：未闭环不得宣称符号级）"
+                % (ident, item.get("path"))
+            )
+        if item.get("session_id") and not item.get("last_write_ts"):
+            failures.append(
+                "意图场景 %s 的 %r 有会话来源却没有 last_write_ts：会话侧条目的写入时间必须可回指"
+                % (ident, item.get("path"))
+            )
+        if not item.get("session_id") and item.get("last_write_ts"):
+            failures.append(
+                "意图场景 %s 的 %r 没有会话来源却带 last_write_ts=%r：那是编出来的时间戳"
+                % (ident, item.get("path"), item.get("last_write_ts"))
+            )
+
+    # 几何自洽：区间必须落在基线行数内（读冻结的 `repo/` 原文复核）。
+    repo_root = os.path.join(root, ident, INTENT_REPO_DIRNAME)
+    for geometry in truth.get("geometry", {}).get("ops", []):
+        path = geometry.get("path", "")
+        source_path = os.path.join(repo_root, path.replace("/", os.sep))
+        if not os.path.isfile(source_path):
+            failures.append("意图场景 %s 的几何引用了不存在的仓库文件 %r" % (ident, path))
+            continue
+        total = len(_read_lines(source_path))
+        changed = geometry.get("changed")
+        if changed is not None and not (1 <= changed[0] <= changed[1] <= total):
+            failures.append(
+                "意图场景 %s 的 %r 改动区间 %r 超出基线行数 %d" % (ident, path, changed, total)
+            )
+    for item in truth.get("geometry", {}).get("dirty", []):
+        changed = item.get("changed")
+        source_path = os.path.join(repo_root, item.get("path", "").replace("/", os.sep))
+        if os.path.isfile(source_path):
+            total = len(_read_lines(source_path))
+            if changed and not (1 <= changed[0] <= changed[1] <= total):
+                failures.append(
+                    "意图场景 %s 的脏改动区间 %r 超出基线行数 %d" % (ident, changed, total)
+                )
     return failures
 
 
@@ -1427,18 +2408,33 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     _ensure_utf8_stdio()
     parser = argparse.ArgumentParser(
         prog="python -m agent_conflict_radar.bench.gen",
-        description="合成冲突矩阵生成器（M1）：重建冻结产物 / 两层自检 / 物化场景",
+        description="合成矩阵生成器（M1 冲突矩阵 + M2 意图矩阵）：重建冻结产物 / 两层自检 / 物化场景",
     )
     parser.add_argument("--out", metavar="DIR", help="重建冻结产物到该目录（仓库根的 bench/）")
     parser.add_argument("--check", action="store_true", help="两层断言：冻结产物形态 + 重生成逐字节")
     parser.add_argument("--bench-dir", metavar="DIR", default=None, help="--check 的比对基准目录")
-    parser.add_argument("--materialize", metavar="SCENARIO_ID", default=None, help="物化某场景到 --dest")
-    parser.add_argument("--dest", metavar="DIR", default=None, help="配合 --materialize 的输出目录")
+    parser.add_argument("--materialize", metavar="SCENARIO_ID", default=None, help="物化某冲突场景到 --dest")
+    parser.add_argument(
+        "--materialize-intent", metavar="SCENARIO_ID", default=None, help="物化某意图场景到 --dest（M2）"
+    )
+    parser.add_argument("--dest", metavar="DIR", default=None, help="配合 --materialize* 的输出目录")
     args = parser.parse_args(list(argv) if argv is not None else None)
 
-    chosen = [name for name, flag in (("--out", args.out), ("--check", args.check), ("--materialize", args.materialize)) if flag]
+    chosen = [
+        name
+        for name, flag in (
+            ("--out", args.out),
+            ("--check", args.check),
+            ("--materialize", args.materialize),
+            ("--materialize-intent", args.materialize_intent),
+        )
+        if flag
+    ]
     if len(chosen) != 1:
-        parser.error("请恰好选择一种动作：--out / --check / --materialize（收到 %s）" % (chosen or "无"))
+        parser.error(
+            "请恰好选择一种动作：--out / --check / --materialize / --materialize-intent（收到 %s）"
+            % (chosen or "无")
+        )
 
     if args.materialize:
         if not args.dest:
@@ -1450,9 +2446,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         return 0
 
+    if args.materialize_intent:
+        if not args.dest:
+            parser.error("--materialize-intent 需要 --dest")
+        intent_scenario = intent_scenario_by_id(args.materialize_intent)
+        shas = materialize_intent_scenario(intent_scenario, args.dest)
+        sys.stdout.write(
+            _dump_json(
+                {"scenario": intent_scenario.ident, "dest": os.path.abspath(args.dest), "repo_shas": shas}
+            )
+        )
+        return 0
+
     if args.out:
         manifest = write_frozen(args.out)
-        sys.stdout.write("已重建 %d 条场景 → %s\n" % (len(manifest["scenarios"]), os.path.abspath(args.out)))
+        sys.stdout.write(
+            "已重建 %d 条冲突场景 + %d 条意图场景 → %s\n"
+            % (len(manifest["scenarios"]), len(intent_scenario_ids()), os.path.abspath(args.out))
+        )
         return 0
 
     bench_dir = args.bench_dir or _default_bench_dir()
@@ -1462,7 +2473,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         for item in failures:
             sys.stderr.write("  - %s\n" % item)
         return 1
-    sys.stdout.write("生成器自检通过：冻结产物形态 + 重生成逐字节 + 提交 sha 复算（%s）\n" % bench_dir)
+    sys.stdout.write(
+        "生成器自检通过：冻结产物形态 + 重生成逐字节 + 提交 sha 复算（含意图矩阵，%s）\n" % bench_dir
+    )
     return 0
 
 

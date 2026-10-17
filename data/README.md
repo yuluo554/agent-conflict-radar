@@ -98,10 +98,12 @@
    - 假文件路径：`demo-radar-alpha/src/alpha.py`、`demo-radar-beta/pkg/beta.py`；
    - **合成仓库内的相对路径（M1 追加）**：`src/alpha.py`（主场景文件）、`src/beta.py`（负样本里"另一侧改的文件"）、
      `src/filler.py`（rng 生成的**噪声**文件，两个会话都不碰它——让"不误报无关文件"有实物可打）；
+   - **意图矩阵追加的相对路径（M2 追加）**：`src/dup.py`（歧义锚点专用：同一段 2 行出现两次）、
+     `docs/notes.md`（非 Python 文件，R4 闭环实物）——两者只在 `bench/intents/` 里出现，不扰动 M1 的符号几何；
    - **会话根占位符（M1 追加）**：`{{REPO_ROOT}}`，冻结产物里代表"被物化的合成仓库根"，物化时替换为本机路径
      （冻结产物**不得**登记本机绝对路径：那会让"在别人电脑上 `--check` 必红"，属环境依赖事实）；
    - **假 author（M1 追加）**：`radar-user` / `radar-user@example.invalid`（git 提交的固定署名，保 sha 可复算）；
-   - 假 session id：`sess-radar-0001` 起的固定序列（M1 用到 `sess-radar-0001`–`0015`，跨场景连续分配；**禁**真实 UUID）；
+   - 假 session id：`sess-radar-0001` 起的固定序列（M1 用到 `sess-radar-0001`–`0015`；**M2 用到 `sess-radar-0020`–`0026`**；跨场景连续分配；**禁**真实 UUID）；
    - 假用户名：`radar-user`（禁真实用户名）；
    - 假分支：`feat/agent-a`、`feat/agent-b`；
    - 假时间戳：固定基准 `2026-01-01T00:00:00Z` 起的确定偏移（禁真实会话时间）。
@@ -140,17 +142,21 @@
 | R1 | `git merge-tree --write-tree` 在"无共同祖先 / 单 commit 仓库"下的输出形态与退出码 | ✅ **已闭环**（见 §六 6.1） | M1 |
 | R2 | Codex `apply_patch` 载荷内文件路径字段形态 | ✅ **已闭环**（见 §六 6.2） | M1 |
 | R3 | Claude `MultiEdit` 字段形态（本机是否出现？`edits[]` 结构？） | ✅ **已闭环**：本机 **0 次**出现（见 §六 6.3） | M1 |
-| R4 | 非 Python 文件的符号级降级口径（行区间近似） | ⬜ 待核对 | M2 |
+| R4 | 非 Python 文件的符号级降级口径（行区间近似） | ✅ **已闭环（M2）**：判据 = 后缀不是 `.py` → `approximate=True`，且产物里**没有** `symbol`/`symbols` 键（详见 §6.6）；实物 = `bench/intents/intent_write_and_non_python/`（`docs/notes.md`） | M2 |
 | R5 | 冲突矩阵覆盖度门槛具体数值 | ✅ **已闭环**：门槛值落在 `bench/manifest.json` 的 `coverage.min_count_by_type`（六类各 ≥1），并附 `count_by_type` / `missing_types` / 阈值成对样例声明；`--check` 断言三者自洽 | M1 |
 | R6 | 本机并行样本快照是否随复核变化 | 🔶 **M1 复核**：Claude 125 个会话文件 / Codex 220 个，与题面基准日快照一致（题面 94 为"带 cwd 的会话数"，本次按文件数计，口径不同不矛盾）。**追加发现**：3 个 Claude journal 文件只有元信息行 → 落 `undetermined(no_message_line)` 而不是静默丢弃 | M1 |
 
-> **纪律**：R4 未闭环前，非 Python 文件的符号级一律落 `approximate=True` 且**不给符号名**，
-> 不得作为"已支持"对外宣称。R1–R3 的闭环结论已三处同步：`versions.py` / `plan/04` / `plan/07` 决策记录。
+> **纪律**：R1–R4 已全部闭环，对应解析路径方可对外称"已支持"。R1–R3 的闭环结论已三处同步：
+> `versions.py` / `plan/04` / `plan/07` 决策记录；R4 的闭环落点在 `plan/05` §八 + `plan/04` M2 + `plan/07` 决策记录。
 >
 > **R1–R3 在 M1 收尾新增的落点**：三条结论都**钉进了合成矩阵**——冻结的会话日志复现了实测形态
 > （Claude 首行不带 `message`、Codex 首行恒为 `session_meta`、Codex 子会话无 `session_id`），
 > 每条场景的 `git_expected_merge_exit` 由 `--check` **现场真跑 `merge-tree`** 复核。
 > 即："我们按实测形态解析"这句话现在有可复跑的实物支撑（`tests/test_bench_matrix.py`）。
+>
+> **R4 在 M2 闭环的落点**：`intent.py` 按后缀判据给 `approximate=True`，产物里**没有**符号字段；
+> `tests/test_intent.py::test_non_python_files_are_approximate_and_carry_no_symbol_field` 断言整份
+> `intent.json` 不含 `"symbol"` 子串，变异组 M21 把后缀判据改成恒真 → 该断言当场变红（见 §6.6）。
 
 ---
 
@@ -251,3 +257,34 @@
 
 > 复跑命令：`py -X utf8 -m agent_conflict_radar.bench.gen --check`
 > （两层断言 + 提交 sha 复算 + 上表的 merge-tree exit 现场复核）。
+
+### 6.6 M2 意图矩阵的落盘形态（M2 收尾，2026-10-18）
+
+`bench/intents/` 是**M2 的独立冻结树**（与 M1 的 `bench/scenarios/` 分开，理由见 `plan/05` §九：
+两套真值语义不同，合在一起就得放宽 M1 的"每条场景恰好两个改动侧"判据 = 改松门禁换便利）。
+
+| 决定 | 内容 | 依据 |
+|---|---|---|
+| **定位基线 = `HEAD`** | 会话里的 `old_string` 一律在 `git show HEAD:<path>` 的版本里定位 | agent 的改动相对**它开始时的已提交版本**；磁盘可能已带上这次改动，在工作区里找锚点会找不到。同时把分析限制在只读 git 对象上——**零工作区读取、零仓库外读取** |
+| **磁盘是事实** | `git diff -U0` / `git diff --cached -U0` 的 hunk 给出区间；与会话不一致时以磁盘为准并点名 `disk_and_session_disagree` | `plan/04` M2 步骤 3；"以磁盘为准"必须让人**看得出来**（会话原值保留在 `writes[]`） |
+| **落点三分法** | `exact`（磁盘 hunk 或会话锚点在 `HEAD` 里唯一命中）/ `coarse`（文件在、区间不可断言）/ `unknown`（连文件都定不下来） | "不伪造精确区间"的可执行形态；`exact+coarse+unknown == entries` 写成恒等式断言 |
+| **`LA` 与 `MultiEdit` 不编造** | `MultiEdit` 本机 0 次出现 → known-name 占位、落 `unknown` + 计注记，**连 `edits[]` 字段形态都不编** | R3 的纪律从 M1 原样延续到 M2 |
+| **非 Python 文件不带符号字段** | `approximate=True`，产物里**没有** `symbol`/`symbols` 键 | R4 闭环；"键存在但恒为 null"会被误读成"已支持" |
+| **`dirty` 声明要现场复核** | `--check` 除了比对冻结文本，还现场跑 `git diff --name-only` 与 `git diff --cached --name-only` | 只比文本**永远发现不了**"物化没把改动写进去"，那条期望就是空中楼阁 |
+
+**八条意图场景覆盖表**（`--check` 与 `tests/test_intent.py` 两侧都断言）：
+
+| 场景 | 覆盖的分支 |
+|---|---|
+| `intent_edit_exact` | 唯一锚点 → `exact`；同日志里的 `Read`（非写工具）不产出条目 |
+| `intent_replace_all_coarse` | `replace_all=True` → `coarse` 且无区间 |
+| `intent_ambiguous_anchor_coarse` | 锚点两处命中（`src/dup.py`）→ `coarse` + `anchor_ambiguous#2` |
+| `intent_multi_edit_unknown` | `MultiEdit` → `unknown` + 计注记；同会话另一条 `Edit` 仍精确 |
+| `intent_codex_exec_patch` | `exec` 同形变体被认出；不含 patch 标记的 `exec` 不算写操作 |
+| `intent_write_and_non_python` | 整文件 `Write` 的有效改动区间；`docs/notes.md` → `approximate=True`（R4） |
+| `intent_multi_write_merge` | 同会话同文件两次写入 → 合并（区间并集 + `last_write_ts` 取最大），`write_ops == 2` 而 `entries == 1` |
+| `intent_disk_wins` | `git diff` / `git diff --cached` 两条通路；磁盘优先 + `disk_and_session_disagree` |
+
+> 复跑命令：`py -X utf8 -m agent_conflict_radar.bench.gen --check`
+> （两层断言 + 冲突矩阵与意图矩阵的提交 sha 复算 + merge-tree exit 现场复核 + 意图矩阵的脏改动现场复核）。
+> 单条物化：`py -X utf8 -m agent_conflict_radar.bench.gen --materialize-intent intent_disk_wins --dest out/scene`。

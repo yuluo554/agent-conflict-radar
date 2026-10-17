@@ -1,0 +1,187 @@
+{
+  "coverage": {
+    "count_by_type": {
+      "intent_precision": 8,
+      "non_python_approximate": 1
+    },
+    "counting_unit": "用例条目数（一个 intent case 一条），不是命中记录数（K12 的口径声明）",
+    "min_count_by_type": {
+      "intent_precision": 2,
+      "non_python_approximate": 1
+    },
+    "missing_types": [],
+    "sampling_notice": "抽样覆盖非穷举：本矩阵声明的是「三分法每条分支至少一条 + 集合覆盖」。"
+  },
+  "generator_version": "m2-1",
+  "scenarios": [
+    {
+      "cases": [
+        {
+          "case_id": "intent_edit_exact",
+          "truth_sha256": "959dbeee1a715fe2dc7ef6573f0b0ae775d6955228ebd88ba144204ac8363d0d"
+        }
+      ],
+      "id": "intent_edit_exact",
+      "reason": "unique_anchor_exact",
+      "repo_shas": {
+        "base_commit": "660019a2690184cc50c85ff47d43a42b8ed6b0fd",
+        "branches": {}
+      },
+      "sessions": [
+        "claude:sess-radar-0020.jsonl"
+      ],
+      "truth_sha256": "959dbeee1a715fe2dc7ef6573f0b0ae775d6955228ebd88ba144204ac8363d0d",
+      "types": [
+        "intent_precision"
+      ]
+    },
+    {
+      "cases": [
+        {
+          "case_id": "intent_replace_all_coarse",
+          "truth_sha256": "64640e42933d923cb6721e842467504049e06ef6b93a3eb621eb0581496d387e"
+        }
+      ],
+      "id": "intent_replace_all_coarse",
+      "reason": "replace_all_has_no_exact_range",
+      "repo_shas": {
+        "base_commit": "660019a2690184cc50c85ff47d43a42b8ed6b0fd",
+        "branches": {}
+      },
+      "sessions": [
+        "claude:sess-radar-0021.jsonl"
+      ],
+      "truth_sha256": "64640e42933d923cb6721e842467504049e06ef6b93a3eb621eb0581496d387e",
+      "types": [
+        "intent_precision"
+      ]
+    },
+    {
+      "cases": [
+        {
+          "case_id": "intent_ambiguous_anchor_coarse",
+          "truth_sha256": "a45212d26062e13a483c3aaaa5db45bf997495725b06c030895c45dae2bc237b"
+        }
+      ],
+      "id": "intent_ambiguous_anchor_coarse",
+      "reason": "anchor_hits_twice_must_degrade",
+      "repo_shas": {
+        "base_commit": "660019a2690184cc50c85ff47d43a42b8ed6b0fd",
+        "branches": {}
+      },
+      "sessions": [
+        "claude:sess-radar-0022.jsonl"
+      ],
+      "truth_sha256": "a45212d26062e13a483c3aaaa5db45bf997495725b06c030895c45dae2bc237b",
+      "types": [
+        "intent_precision"
+      ]
+    },
+    {
+      "cases": [
+        {
+          "case_id": "intent_multi_edit_unknown",
+          "truth_sha256": "6745d8726fb343983b3d023e896de93e9a809b55e9051269170cbcfdb0bfa13b"
+        }
+      ],
+      "id": "intent_multi_edit_unknown",
+      "reason": "multi_edit_absent_from_local_scan",
+      "repo_shas": {
+        "base_commit": "660019a2690184cc50c85ff47d43a42b8ed6b0fd",
+        "branches": {}
+      },
+      "sessions": [
+        "claude:sess-radar-0023.jsonl"
+      ],
+      "truth_sha256": "6745d8726fb343983b3d023e896de93e9a809b55e9051269170cbcfdb0bfa13b",
+      "types": [
+        "intent_precision"
+      ]
+    },
+    {
+      "cases": [
+        {
+          "case_id": "intent_codex_exec_patch",
+          "truth_sha256": "f7ea272d98ca051c5cfb34c16ae842138b73c8d0fa8f8f9a4b5b233d0cbdfa6d"
+        }
+      ],
+      "id": "intent_codex_exec_patch",
+      "reason": "codex_exec_variant_is_recognized",
+      "repo_shas": {
+        "base_commit": "660019a2690184cc50c85ff47d43a42b8ed6b0fd",
+        "branches": {}
+      },
+      "sessions": [
+        "codex:sess-radar-0024.jsonl"
+      ],
+      "truth_sha256": "f7ea272d98ca051c5cfb34c16ae842138b73c8d0fa8f8f9a4b5b233d0cbdfa6d",
+      "types": [
+        "intent_precision"
+      ]
+    },
+    {
+      "cases": [
+        {
+          "case_id": "intent_write_and_non_python",
+          "truth_sha256": "2243e932f84b09fae46dead8c529fe8711699a0f041b14fed3a616566b426583"
+        }
+      ],
+      "id": "intent_write_and_non_python",
+      "reason": "write_effective_range_and_r4_approximate",
+      "repo_shas": {
+        "base_commit": "660019a2690184cc50c85ff47d43a42b8ed6b0fd",
+        "branches": {}
+      },
+      "sessions": [
+        "claude:sess-radar-0025.jsonl"
+      ],
+      "truth_sha256": "2243e932f84b09fae46dead8c529fe8711699a0f041b14fed3a616566b426583",
+      "types": [
+        "intent_precision",
+        "non_python_approximate"
+      ]
+    },
+    {
+      "cases": [
+        {
+          "case_id": "intent_multi_write_merge",
+          "truth_sha256": "6397c6a9e58cc797f9059d0749231f074048cc20f26994c5ad1905df3a585f8f"
+        }
+      ],
+      "id": "intent_multi_write_merge",
+      "reason": "same_session_same_file_writes_are_merged",
+      "repo_shas": {
+        "base_commit": "660019a2690184cc50c85ff47d43a42b8ed6b0fd",
+        "branches": {}
+      },
+      "sessions": [
+        "claude:sess-radar-0027.jsonl"
+      ],
+      "truth_sha256": "6397c6a9e58cc797f9059d0749231f074048cc20f26994c5ad1905df3a585f8f",
+      "types": [
+        "intent_precision"
+      ]
+    },
+    {
+      "cases": [
+        {
+          "case_id": "intent_disk_wins",
+          "truth_sha256": "1539b90ad86fafe01d74add0fd4a64b921d3771c4a0be99690bb9c68982fe0f7"
+        }
+      ],
+      "id": "intent_disk_wins",
+      "reason": "disk_is_the_fact",
+      "repo_shas": {
+        "base_commit": "660019a2690184cc50c85ff47d43a42b8ed6b0fd",
+        "branches": {}
+      },
+      "sessions": [
+        "claude:sess-radar-0026.jsonl"
+      ],
+      "truth_sha256": "1539b90ad86fafe01d74add0fd4a64b921d3771c4a0be99690bb9c68982fe0f7",
+      "types": [
+        "intent_precision"
+      ]
+    }
+  ]
+}

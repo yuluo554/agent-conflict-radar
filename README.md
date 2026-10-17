@@ -6,16 +6,16 @@
 
 ---
 
-## ⚠️ 当前状态：M1 已交付（2026-10-17）
+## ⚠️ 当前状态：M2 已交付（2026-10-18）
 
-**这不是一个完成品。** 骨架可安装、`scan` 已交付、合成冲突矩阵已入仓可审计；但**意图提取、检测、报告与基准评分尚未落地**：
+**这不是一个完成品。** 骨架可安装、`scan` 与 `intent` 已交付、合成冲突矩阵与意图矩阵已入仓可审计；但**三级检测、报告与基准评分尚未落地**：
 
 | 命令 | 状态 | 计划里程碑 |
 |---|---|---|
 | `radar scan` | ✅ 已交付 | M1 |
+| `radar intent` | ✅ 已交付 | M2 |
 | `radar config` | ✅ 已交付 | M0 |
 | `radar selftest` | ✅ 已交付 | M0 |
-| `radar intent` | ⬜ 未交付（exit 4 显式拦截） | M2 |
 | `radar detect` | ⬜ 未交付（exit 4） | M3 |
 | `radar report` | ⬜ 未交付（exit 4） | M4 |
 | `radar bench` | ⬜ 未交付（exit 4） | M5 |
@@ -24,7 +24,9 @@
 
 **`radar scan` 的退出码语义**：成功**恒为 0**；`undetermined`（未识别的会话形态、无消息行的文件等）只作为提示出现在产物里，**不改退出码**——它是"我们没看懂"，不是"有冲突"。真正的环境问题（`--repo` 不在 git 仓库内、显式指定的会话根不存在）才给 exit 3，且不吐任何产物。
 
-进度与逐棒 DoD 见 [`plan/06-里程碑.md`](plan/06-里程碑.md)；下一棒交接见 [`plan/HANDOFF-M2.md`](plan/HANDOFF-M2.md)。
+**`radar intent` 的退出码语义**：同样**成功恒为 0**。落点三分法 `exact` / `coarse` / `unknown` 是**产物字段**而不是退出码——`coarse`（`replace_all` / 锚点多处命中）与 `unknown`（`MultiEdit` / `file_path` 缺失）是"我们没定位到精确区间"，不是"有冲突"。环境问题（非 git 仓库 / 会话源不存在）仍是 exit 3。
+
+进度与逐棒 DoD 见 [`plan/06-里程碑.md`](plan/06-里程碑.md)；下一棒交接见 [`plan/HANDOFF-M3.md`](plan/HANDOFF-M3.md)。
 
 ---
 
@@ -58,7 +60,7 @@ radar bench --only same_symbol_diff_lines      # 只跑指定场景
 radar bench --bench-dir bench --out-dir out    # 显式指定矩阵目录与产物目录
 ```
 
-### 真实数据的只读演示（`scan` 已交付；其余待 M2–M4）
+### 真实数据的只读演示（`scan` / `intent` 已交付；其余待 M3–M4）
 
 ```bash
 # 工作区与会话发现（会话根默认按常见位置探测；也可显式传）
@@ -70,13 +72,32 @@ radar scan --repo . --claude-root <你的 Claude 会话根> --codex-root <你的
 # 落盘产物 + 固定参考时刻（确定性演示与基准必须显式传 --now）
 radar scan --repo . --out-dir out --now 2026-01-01T10:00:00Z
 
-# 意图 → 三级检测 → 报告
-radar intent --repo .
+# 变更意图：会话写操作 + 未提交 diff → 文件集合与改动行区间
+radar intent --repo . --claude-root <你的 Claude 会话根> --codex-root <你的 Codex 会话根>
+radar intent --repo . --out-dir out --now 2026-01-01T10:00:00Z
+
+# 三级检测 → 报告（M3 / M4 交付后）
 radar detect --repo .
 radar report --repo . --out-dir out --format both
 ```
 
 `scan` 的输出（stdout，或 `--out-dir` 下的 `scan.json`）：工作区表、会话归集表（含 `derived_from` 去重）、活跃 cell 表、`undetermined` 独立分区与计数。**它不做任何冲突判定**——判定在 M3。
+
+`intent` 的输出（stdout，或 `--out-dir` 下的 `intent.json`）：每条 `(workspace, path)` 的 `sessions` / `last_write_ts` / `changed_ranges` / `precision` / `ranges_source` / `approximate` / `reasons` / `evidence`，逐会话的 `writes[]`（谁改了哪一段），以及 `undetermined` 与计数。**它也不做冲突判定**——只把"谁正在改什么"整理成可对账的结构。
+
+### 意图落点三分法（`exact` / `coarse` / `unknown`）
+
+| 落点 | 判据 | 产物形态 |
+|---|---|---|
+| `exact` | 改动区间可**独立复算**：磁盘 `git diff -U0` 的 hunk，或会话锚点在 `HEAD` 基线里**唯一命中** | `changed_ranges` 非空 |
+| `coarse` | 文件定位到了，但区间不可精确断言：`replace_all` / 锚点 0 处或多处命中 / 写内容与基线相同 / 删除 / 非 git 工作区 | `changed_ranges` 为空（**不编"看起来精确"的区间**） |
+| `unknown` | 连文件都定不下来：`MultiEdit`（本机 0 次出现）/ `file_path` 缺失 / patch 里没有文件指令行 | `path` 为空 + 计数 |
+
+三条纪律（都写进了测试）：
+
+* **锚点多处命中 → 显式降级**，并在 `reasons` 里点名命中次数（`anchor_ambiguous#2`），**绝不挑第一个**；
+* **磁盘是事实**：会话区间与磁盘 hunk 不一致时以磁盘为准，`ranges_source=disk`，并在 `reasons` 里点名 `disk_and_session_disagree`（会话原值保留在 `writes[]` 里，可回指）；
+* **非 Python 文件**（R4）：行区间照给但 `approximate=true`，产物里**不出现任何符号字段**——符号级能力只对 `.py` 成立，未闭环的不宣称已支持。
 
 > 真实本机数据只作**可行性演示与人工抽验**：本机实测（基准日 2026-10-17）309 对时间重叠会话、63 个独立会话、独立重叠 22 对，而**同文件重叠 0 对**——真实并行冲突样本几乎为零。因此检出能力**只能由合成矩阵断言**（见下方"诚实披露"）。
 
@@ -95,26 +116,30 @@ radar report --repo . --out-dir out --format both
 
 ---
 
-## 合成冲突矩阵（已入仓，M1）
+## 合成冲突矩阵（已入仓，M1）与意图矩阵（M2）
 
 真实并行冲突样本几乎为零（见下方"诚实披露"），所以**检出能力只能由合成矩阵断言**。矩阵已随仓冻结在 `bench/`：
 
 | 路径 | 内容 |
 |---|---|
-| `bench/manifest.json` | 场景清单 + 覆盖度门槛（每类 ≥1 + 集合覆盖 + 显式 `missing_types`）+ 生成器版本 + 真值 sha256 台账 |
+| `bench/manifest.json` | 冲突场景清单 + 覆盖度门槛（每类 ≥1 + 集合覆盖 + 显式 `missing_types`）+ 生成器版本 + 真值 sha256 台账 |
 | `bench/scenarios/<id>/repo/` | 合成仓库的**基线**源码（纯文本；`.git` 刻意不入仓，见下） |
 | `bench/scenarios/<id>/sessions/` | 合成会话日志（仿 Claude Code / Codex 的真实形态，`{{REPO_ROOT}}` 为占位符） |
 | `bench/scenarios/<id>/truth.json` | **植入真值**：只存输入与期望（几何 + `levels_expected`/`symbols_expected` + `objects_forbidden` 反向样例） |
+| `bench/intents/manifest.json` | **意图矩阵**台账（M2）：覆盖度门槛 + 每条意图真值的 sha256 |
+| `bench/intents/<id>/` | 意图场景：`repo/`（基线）+ `sessions/` + `truth.json`（`entries_expected` / `unknown_expected` / `counts_expected` / `geometry`） |
 
-七条场景：`same_file_diff_symbol` / `same_symbol_diff_lines` / `whole_file_overwrite` / `subagent_derived` / `negative_no_overlap` / `threshold_exact` / `threshold_near_miss`（最后两条**成对**卡在相邻容差两侧）。
+冲突场景七条：`same_file_diff_symbol` / `same_symbol_diff_lines` / `whole_file_overwrite` / `subagent_derived` / `negative_no_overlap` / `threshold_exact` / `threshold_near_miss`（最后两条**成对**卡在相邻容差两侧）。
+
+意图场景八条（每条对应三分法的一条分支或一条降级纪律）：`intent_edit_exact` / `intent_replace_all_coarse` / `intent_ambiguous_anchor_coarse` / `intent_multi_edit_unknown` / `intent_codex_exec_patch` / `intent_write_and_non_python` / `intent_multi_write_merge` / `intent_disk_wins`。
 
 三条值得写进 README 的纪律：
 
-* **真值可独立复算**：真值里没有 `observed_*` 字段；把检测引擎整个注释掉，光看 `repo/` 原文 + 几何 + `config/radar.toml` 也能把期望值重新算出来（`tests/test_bench_matrix.py` 就是这么验的）。
+* **真值可独立复算**：真值里没有 `observed_*` 字段；把检测引擎整个注释掉，光看 `repo/` 原文 + 几何 + `config/radar.toml` 也能把期望值重新算出来（`tests/test_bench_matrix.py` 与 `tests/test_intent.py` 就是这么验的）。
 * **阈值不在真值里复制**：涉及阈值处一律写成指向 `config` 的符号引用；`--check` 会**现场读 config 求值**——改了阈值而真值不动，当场变红。
 * **`.git` 不入冻结产物**：`.git` 内部字节随 zlib/git 版本漂，跨平台不可能逐字节重现。提交的可复现性改用更强的判据——`--check` 重新物化合成仓库并**复算提交 sha**（sha 只由内容与固定元数据决定）。
 
-矩阵生成器在包内（`python -m agent_conflict_radar.bench.gen`；`--out bench` 重建 / `--check` 两层自检 / `--materialize <id> --dest <dir>` 物化成真仓库）。CI 每次都会跑 `--check`。**注意**：`radar bench`（拿矩阵给引擎**评分**）属于 M5，尚未交付——现在能跑的是"矩阵本身可重建"。
+矩阵生成器在包内（`python -m agent_conflict_radar.bench.gen`；`--out bench` 重建 / `--check` 两层自检 / `--materialize <id> --dest <dir>` 物化冲突场景 / `--materialize-intent <id> --dest <dir>` 物化意图场景）。CI 每次都会跑 `--check`。**注意**：`radar bench`（拿矩阵给引擎**评分**）属于 M5，尚未交付——现在能跑的是"矩阵本身可重建"。
 
 > 合成数据白名单（K11）：假项目名 `demo-radar-alpha`、假 session id `sess-radar-NNNN`、假用户名 `radar-user`、固定基准时间 `2026-01-01T00:00:00Z` 起的确定偏移。真实日志、真实路径、真实 session id **一律不入仓**（`tools`/`tests` 有零命中断言）。
 
@@ -128,10 +153,10 @@ radar report --repo . --out-dir out --format both
 | `1` | 有冲突 |
 | `2` | 用法错误（未知子命令 / 缺必填参数 / 未知 `--format` / 路径不存在） |
 | `3` | 依赖或环境缺失（git 不可用 / 配置缺失或不可解析 / 会话源不存在 / `--repo` 不在 git 仓库内） |
-| `4` | 阶段未就绪（**骨架期专用**，随模块落地逐项退役；`scan` 已于 M1 退役） |
+| `4` | 阶段未就绪（**骨架期专用**，随模块落地逐项退役；`scan` 已于 M1 退役、`intent` 已于 M2 退役） |
 
 > 退出码非 0 **不一定**是跑挂：`detect` 对存在冲突的仓库返回 `1` 是**既定语义**，不是故障；
-> `scan` 采到 `undetermined` 仍是 `0`（见上文"当前状态"）。
+> `scan` / `intent` 采到 `undetermined` / `coarse` / `unknown` 仍是 `0`（见上文"当前状态"）。
 
 ---
 
@@ -165,9 +190,7 @@ radar report --repo . --out-dir out --format both
 | `radar config` | 打印生效配置 | M0 |
 | `radar selftest` | 自检 | M0 |
 
-全局选项写在子命令**之前**：`radar --config path config`。
-
----
+全局选项写在子命令**之前**：`radar --config path config`。---
 
 ## 诚实披露（三项风险，如实写，不粉饰）
 

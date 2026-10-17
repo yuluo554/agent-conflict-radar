@@ -211,8 +211,13 @@ def test_selftest_detects_stage_table_overlap(run_cli, monkeypatch):
     """阶段表自相矛盾（同一命令既已交付又未就绪）→ 自检必须变红。"""
     from agent_conflict_radar import cli
 
-    # 挑一个**仍在** STAGE_NOT_READY 里的命令来制造重叠（scan 已于 M1 交付，不能再拿来用）。
-    monkeypatch.setattr(cli.stages, "DELIVERED_COMMANDS", ("config", "selftest", "intent"))
+    # 从**当前仍在** STAGE_NOT_READY 里的命令挑一个来制造重叠——不要硬编码命令名：
+    # 每棒交付一条命令都会让硬编码的名字失效（M2 交付 `intent` 时本用例当场变红，正是这个原因）。
+    still_staged = sorted(stages.STAGE_NOT_READY)
+    assert still_staged, "阶段未就绪表已空：本用例没有可用样本（里程碑全交付后应整条退役）"
+    monkeypatch.setattr(
+        cli.stages, "DELIVERED_COMMANDS", tuple(stages.DELIVERED_COMMANDS) + (still_staged[0],)
+    )
     code, _out, err = run_cli(["selftest"])
     assert code == 1
     assert "阶段表" in err

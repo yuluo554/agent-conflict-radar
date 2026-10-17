@@ -67,10 +67,12 @@ MUTATIONS: List[Mutation] = [
     Mutation(
         "M4",
         "src/agent_conflict_radar/stages.py",
-        'STAGE_NOT_READY = {\n    "intent": "M2",',
-        'STAGE_NOT_READY = {\n    "scan": "M1",\n    "intent": "M2",',
+        'STAGE_NOT_READY = {\n    "detect": "M3",',
+        'STAGE_NOT_READY = {\n    "scan": "M1",\n    "detect": "M3",',
         "tests/test_stage_guard.py::test_no_command_is_unclassified",
-        "把**已退役**的 scan 又塞回阶段未就绪表（幽灵语义复活）→ 阶段守卫必须变红",
+        "把**已退役**的 scan 又塞回阶段未就绪表（幽灵语义复活）→ 阶段守卫必须变红。"
+        "锚点必须指向**仍在**未就绪表里的那条命令：M2 交付 `intent` 时旧锚点（`\"intent\": \"M2\"`）"
+        "当场漂移，变异脚本直接报「锚点未命中」——这正是三重断言该有的行为",
     ),
     Mutation(
         "M5",
@@ -161,10 +163,16 @@ MUTATIONS: List[Mutation] = [
     Mutation(
         "M15",
         "src/agent_conflict_radar/bench/gen.py",
-        '        if key_path.startswith("observed"):',
-        "        if False:  # 变异：不再拦 observed_*",
+        '        if key_path.startswith("observed"):\n'
+        '            failures.append("场景 %s 的真值出现 observed_* 字段（%s）：K9 禁止把观测写进真值" % (ident, key_path))\n'
+        "            continue",
+        '        if False:  # 变异：不再拦 observed_*\n'
+        '            failures.append("场景 %s 的真值出现 observed_* 字段（%s）：K9 禁止把观测写进真值" % (ident, key_path))\n'
+        "            continue",
         "tests/test_bench_matrix.py::test_check_actually_detects_a_tampered_truth",
-        "真值里的 observed_* 不再被拦 → 那条「往真值里加一个观测字段」的探针必须变红（K9）",
+        "真值里的 observed_* 不再被拦 → 那条「往真值里加一个观测字段」的探针必须变红（K9）。"
+        "锚点必须带上下文：M2 新增的 `_check_intent_payload` 有同形的一行，只锚 `if key_path.startswith` "
+        "会改到意图侧、目标守门照常绿（本棒实测踩中过一次，靠变异脚本的「未检出」当场抓到）",
     ),
     Mutation(
         "M16",
@@ -173,6 +181,60 @@ MUTATIONS: List[Mutation] = [
         "    text = json.dumps(payload, sort_keys=True, ensure_ascii=False, indent=4)",
         "tests/test_bench_matrix.py::test_generator_serializer_is_an_independent_implementation_with_identical_bytes",
         "生成侧序列化参数与生产侧漂移 → 逐字节一致性断言必须变红（K10）",
+    ),
+    Mutation(
+        "M17",
+        "src/agent_conflict_radar/intent.py",
+        "    if len(hits) > 1:\n"
+        "        # 多处命中：显式降级 + **在产物里点名命中次数**（不许挑第一个当真值）。\n"
+        '        return _Located([], PRECISION_COARSE, reasons + ["%s#%d" % (REASON_ANCHOR_AMBIGUOUS, len(hits))])\n'
+        "    start = hits[0] + 1",
+        "    start = hits[0] + 1  # 变异：多处命中时直接挑第一个",
+        "tests/test_intent_parse.py::test_locate_ambiguous_anchor_is_coarse_and_names_the_count",
+        "锚点多处命中时挑第一个（把「不确定」伪装成「精确」）→ 歧义降级断言必须变红",
+    ),
+    Mutation(
+        "M18",
+        "src/agent_conflict_radar/intent.py",
+        "    if op.replace_all:\n        return _Located([], PRECISION_COARSE, [REASON_REPLACE_ALL])",
+        "    if op.replace_all:\n        return _Located([(1, 1)], PRECISION_EXACT, [])  # 变异：编一个看起来精确的区间",
+        "tests/test_intent_parse.py::test_locate_replace_all_never_claims_a_range",
+        "`replace_all` 编出一个精确区间 → 「不伪造精确行区间」断言必须变红",
+    ),
+    Mutation(
+        "M19",
+        "src/agent_conflict_radar/intent.py",
+        "        if op.reason in (REASON_MULTI_EDIT, REASON_MISSING_FILE_PATH):\n"
+        "            return _Located([], PRECISION_UNKNOWN, [op.reason])",
+        "        if op.reason in (REASON_MULTI_EDIT, REASON_MISSING_FILE_PATH):\n"
+        "            return _Located([], PRECISION_COARSE, [op.reason])  # 变异：unknown 降级成 coarse",
+        "tests/test_intent_parse.py::test_locate_multi_edit_reason_maps_to_unknown",
+        "`MultiEdit` 从 unknown 降级成 coarse（假装「文件是知道的」）→ 三分法断言必须变红",
+    ),
+    Mutation(
+        "M20",
+        "src/agent_conflict_radar/intent.py",
+        "        if disk_ranges:\n            ranges, source = disk_ranges, RANGES_FROM_DISK",
+        "        if False:  # 变异：不再以磁盘为准\n            ranges, source = disk_ranges, RANGES_FROM_DISK",
+        "tests/test_intent.py::test_disk_diff_wins_and_disagreement_is_named",
+        "磁盘与会话不一致时不再以磁盘为准 → 「磁盘是事实」断言必须变红",
+    ),
+    Mutation(
+        "M21",
+        "src/agent_conflict_radar/intent.py",
+        '    return str(path).lower().endswith(".py")',
+        "    return True  # 变异：所有文件都当 Python（假装有符号级能力）",
+        "tests/test_intent.py::test_non_python_files_are_approximate_and_carry_no_symbol_field",
+        "非 Python 文件被当成 Python（R4 未闭环却宣称符号级）→ approximate 断言必须变红",
+    ),
+    Mutation(
+        "M22",
+        "bench/intents/intent_ambiguous_anchor_coarse/truth.json",
+        '"anchor_ambiguous#2"',
+        '"anchor_ambiguous#1"',
+        "tests/test_intent.py::test_scenario_parses_to_the_frozen_truth",
+        "意图真值被手改（命中次数脱离几何）→ 逐场景对账 + 生成器 --check 必须变红："
+        "这条同时打「真值禁手补」与「重生成逐字节」两层",
     ),
 ]
 

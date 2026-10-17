@@ -18,12 +18,13 @@ DELIVERED_COMMANDS = (
     "selftest",
     # M1：`scan` 于 2026-10-17 交付（`discover.py` 实现 + 测试 + 离线冒烟；退役四步已在同一提交内走完）。
     "scan",
+    # M2：`intent` 于 2026-10-18 交付（`intent.py` 实现 + 测试 + 离线冒烟；退役四步已在同一提交内走完）。
+    "intent",
 )
 
 #: 阶段未就绪：命令已注册参数（README 里的用法可以照抄），但实现还没落地。
 #: 值 = 计划交付该命令的里程碑（消息里原样带出，便于用户判断进度）。
 STAGE_NOT_READY = {
-    "intent": "M2",
     "detect": "M3",
     "report": "M4",
     "bench": "M5",
