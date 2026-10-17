@@ -33,6 +33,7 @@ def _schema() -> Dict[str, Dict[str, type]]:
     return {
         "schema": {"version": int},
         "window": {"active_minutes": int, "scan_days": int},
+        "scan": {"max_line_bytes": int},
         "symbol": {"adjacent_tolerance": int, "min_overlap_lines": int},
         "severity": {
             "same_symbol": int,

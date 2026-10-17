@@ -127,13 +127,92 @@
 
 ## 五、待核对项闭环表
 
+> **M1 只读探针实测（2026-10-17）**：R1 / R2 / R3 已闭环，明细见下方 §六。探针为只读脚本，
+> 只打印**字段名与计数**，未打印任何 prompt 正文或真实路径；探针脚本本身不入仓（避免携带本机绝对路径）。
+
 | # | 项 | 状态 | 闭环里程碑 |
 |---|---|---|---|
-| R1 | `git merge-tree --write-tree` 在"无共同祖先 / 单 commit 仓库"下的输出形态与退出码 | ⬜ 待核对 | M1 |
-| R2 | Codex `apply_patch` 载荷内文件路径字段形态 | ⬜ 待核对 | M1 |
-| R3 | Claude `MultiEdit` 字段形态（本机是否出现？`edits[]` 结构？） | ⬜ 待核对 | M1 |
+| R1 | `git merge-tree --write-tree` 在"无共同祖先 / 单 commit 仓库"下的输出形态与退出码 | ✅ **已闭环**（见 §六 6.1） | M1 |
+| R2 | Codex `apply_patch` 载荷内文件路径字段形态 | ✅ **已闭环**（见 §六 6.2） | M1 |
+| R3 | Claude `MultiEdit` 字段形态（本机是否出现？`edits[]` 结构？） | ✅ **已闭环**：本机 **0 次**出现（见 §六 6.3） | M1 |
 | R4 | 非 Python 文件的符号级降级口径（行区间近似） | ⬜ 待核对 | M2 |
-| R5 | 冲突矩阵覆盖度门槛具体数值 | ⬜ 待定 | M1（写进 `bench/manifest.json`） |
-| R6 | 本机并行样本快照是否随复核变化 | ⬜ 待复核 | M1（只更新快照，不改承诺） |
+| R5 | 冲突矩阵覆盖度门槛具体数值 | 🔶 M0 已定"每类 ≥1 + 集合覆盖"口径，数值待落 | M1（写进 `bench/manifest.json`） |
+| R6 | 本机并行样本快照是否随复核变化 | 🔶 **M1 复核**：Claude 125 个会话文件 / Codex 220 个，与题面基准日快照一致（题面 94 为"带 cwd 的会话数"，本次按文件数计，口径不同不矛盾） | M1 |
 
-> **纪律**：R1–R3 任一未闭环，对应路径只能落 `unknown` / `degraded`，**不得进入冲突判定**，更不得作为"已支持"对外宣称。
+> **纪律**：R4 未闭环前，非 Python 文件的符号级一律落 `approximate=True` 且**不给符号名**，
+> 不得作为"已支持"对外宣称。R1–R3 的闭环结论已三处同步：`versions.py` / `plan/04` / `plan/07` 决策记录。
+
+---
+
+## 六、M1 只读探针实测记录（2026-10-17）
+
+> 本节是**会话解析与冲突检测的全部字段依据**。凡进入检测路径的字段都在这里登记过
+> （对应"未核对字段语义不得落库、不得进入检测路径"的上游纪律）。
+
+### 6.1 R1：`git merge-tree --write-tree` 的形态矩阵（✅ 已闭环）
+
+在临时仓库里实测（未触碰本仓库），git `2.54.0.windows.1`：
+
+| 构造 | 退出码 | stdout 形态 | 只读性 |
+|---|---|---|---|
+| 两侧改同文件同一行（真冲突） | **1** | 第 1 行 = 合并后 tree sha；随后 `100644 <sha> <stage> <path>` 三元组（stage 1=base / 2=ours / 3=theirs）；空行；`Auto-merging <path>` 与 `CONFLICT (content): Merge conflict in <path>` | 工作区与索引**未变**（`status --porcelain` 为空、当前分支不变） |
+| 单 commit 仓库、两侧同一 ref | 0 | 只有 tree sha 一行 | 只读 |
+| 两侧改同文件**不同函数** | 0 | 只有 tree sha（git 自动合并成功，**不报冲突**） | 只读 |
+| 两侧改同文件**同一函数内相隔 3~5 行** | **0** | 只有 tree sha（**git 静默自动合并**） | 只读 |
+| 两侧改同文件**相邻行** | 1 | 同"真冲突"形态 | 只读 |
+| 整文件覆盖 vs 局部 Edit（同区域） | 1 | 同"真冲突"形态 | 只读 |
+| 无共同祖先（孤儿分支） | **128** | `fatal: refusing to merge unrelated histories` | 只读 |
+| 非 git 目录 | **128** | `fatal: not a git repository (or any of the parent directories): .git` | 只读 |
+
+**三条对设计的硬约束**：
+
+1. **exit 1 = 有冲突 / exit 0 = 自动合并成功 / exit 128 = 环境或仓库形态问题**。128 一律落
+   `degraded`（区块级降级为文件级），**绝不**当成"无冲突"。
+2. **区块级只在 git 自动合并失败时才报**。于是"同文件不同函数"和"同一函数内相隔数行"这两种形态
+   **git 是绿的**——这正是本题的价值窗口：**符号级必须把 git 认为没问题的形态也标出来**。
+   合成基准场景 1/2 的期望据此确定（见 `plan/05` §4.2 与 `bench/` 真值）。
+3. 只读性已实测：跑完 `status --porcelain` 为空、当前分支未变。`--write-tree` 只写对象库临时对象，
+   **不改索引、不改工作区**（报告中不得声称"零任何写入"，这条边界已在 `plan/03` 记录）。
+
+### 6.2 R2：Codex `apply_patch` 形态（✅ 已闭环）
+
+* 承载位置：`response_item` 行的 `payload`，`payload.type == "custom_tool_call"`、`payload.name == "apply_patch"`。
+* `payload.input` 是**字符串**（不是结构化对象），以 `*** Begin Patch` 开头，内含
+  `*** Update File: <path>` / `*** Add File: <path>` / `*** Delete File: <path>` 指令行。
+* 实测计数（全量 220 文件）：`apply_patch` 出现 2020 处、`*** Begin Patch` 1486、`*** Update File:` 1119、
+  `*** Add File:` 478、`*** Delete File:` 95。
+* **同族第二形态**：大量 patch 经 `custom_tool_call/exec`（1560 次）以 shell 文本下发，标记同形。
+  M2 按"只认结构位"处理：优先认 `name == "apply_patch"` 的专用调用，`exec` 内嵌 patch 作第二种形态，
+  **两种形态都要有正例与反例**；认不出的落 `unknown` 并计注记。
+
+### 6.3 R3：Claude `MultiEdit`（✅ 已闭环：本机 0 次出现）
+
+* 实测写类工具调用：`Edit` 263 次、`Write` 128 次、**`MultiEdit` 0 次**。
+* `Edit` 的 `input` 键：`file_path` / `old_string` / `new_string` / `replace_all`（263/263 齐）。
+* `Write` 的 `input` 键：`file_path` / `content`。
+* 处置：按"本机 0 次出现的字段形态同样不编造"纪律，M2 对 `MultiEdit` 走**保守降级**——
+  known-name 占位、出现即落 `unknown` 并计注记，**不得**假装支持。
+* 旁证（M2 可用但**不作主依据**）：`toolUseResult` 带 `filePath`(299) / `structuredPatch`(299) /
+  `originalFile`(299)，但这些在**工具结果行**上、不在调用行上。
+
+### 6.4 会话文件与派生关系（G-1 / G-2 / G-3 / G-7 实测）
+
+| 项 | Claude Code（125 文件） | Codex（220 文件） |
+|---|---|---|
+| 判别键（顶层） | `message` | `payload` |
+| **首行是否消息行** | **否**：首行 `type` 实测为 `last-prompt`(58) / `queue-operation`(36) / `user`(28) / `started`(3) → **必须向下找第一条带判别键的行** | **是**：首行恒为 `session_meta`（220/220） |
+| 工作目录 | 逐行顶层 `cwd`（承载于 assistant / user / attachment / system 行） | `session_meta.payload.cwd`（**220/220 全覆盖**） |
+| 分支 | 逐行顶层 `gitBranch` | 无该字段 |
+| 会话标识 | `sessionId`（每文件恒 1 值，122/125 满足） | `payload.session_id`（仅主会话，63/220）→ 子会话取 `payload.id`(220/220) |
+| 时间戳 | 逐行顶层 `timestamp` | 逐行顶层 `timestamp`（末行 50/50 抽样可得） |
+| **subagent 标记** | `isSidechain` 布尔、**按文件一致**（94 全 False / 28 全 True / 3 无该键且无消息行） | 含 `payload.parent_thread_id` 即为子会话（157 个文件） |
+| **派生关系** | 28 个 sidechain 文件**全部**与某主文件共享 `sessionId` → 父 = 同 sessionId 下 `isSidechain=False` 的那只文件 | `payload.parent_thread_id`；157/157 **全部**指向本机另一文件的 `session_id` |
+| 其它可用键 | `uuid` / `parentUuid` / `version` / `type` / `toolUseResult` | `agent_nickname` / `agent_path` / `forked_from_id`(152) / `multi_agent_version` / `runtime_workspace_roots`(6) |
+
+**由实测推出的两条设计决定**（已写入 `plan/04` 与 `plan/07` 决策记录）：
+
+1. **归属判别不能只看首行**（Claude 首行多为元信息行）：判别 = 向下找第一条含判别键的行，
+   并把该行的**源行号**作为 `seq`。
+2. **会话唯一标识不能用 `sessionId`**：Claude 主/子文件共享同一 `sessionId`，Codex 子会话干脆
+   没有 `session_id`。改用 `session_key = "<source>:<相对路径>"`（由输入唯一确定、可复算），
+   `derived_from` 指向父会话的 `session_key`。

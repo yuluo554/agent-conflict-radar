@@ -33,6 +33,11 @@ same_file_diff_symbol = 30
 adjacent_lines = 20
 file_only = 10
 
+[scan]
+# 会话 JSONL 的单行字节上限。超限**显式报错**并把该文件记入 undetermined（code=line_too_long）——
+# 绝不静默截断（截断会产出半条记录，下游无法区分"上游没写完"与"我们切坏了"）。
+max_line_bytes = 2000000
+
 [git]
 # 单个 git 子进程的超时秒数；超时按"依赖/环境缺失"降级（exit 3），不静默当无冲突。
 timeout_seconds = 20

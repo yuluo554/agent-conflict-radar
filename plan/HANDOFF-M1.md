@@ -2,7 +2,10 @@
 
 **项目**：`agent-conflict-radar`（本地目录 `10-18-agent-conflict-radar`）
 **上一棒**：M0 骨架 —— ✅ 完成（2026-10-17）
-**本文件用途**：下一棒开工前**只需读本文件 + `plan/00`·`05`·`06`·`07`**，不依赖对话记忆
+**当前状态**：M0 已交付；**M1 已启动并冻结在中途**（用户要求只交付 M0，M1 进度固化后交给新对话）——
+详见 §五 进度快照。
+**本文件用途**：下一棒开工前**只需读本文件 + `plan/00`·`04`·`05`·`07` + `data/README.md` §六**，
+不依赖对话记忆
 **启动方式（用户侧，绝对路径）**：`/goal 读取 "<项目绝对路径>\plan\HANDOFF-M1.md" 继续完成任务`
 
 ---
@@ -63,7 +66,10 @@
    git 提交固定 `GIT_AUTHOR_DATE`/`GIT_COMMITTER_DATE` 与作者名，保提交 sha 可复算。
 6. **生成器 `--check` 两层断言**：① 冻结产物形态；② 重跑生成器到临时目录 → 与冻结产物**逐字节比对**。
    生成侧与生产侧的规范序**各写一份独立实现**，一致性靠逐字节测试（**别顺手统一成一个 import**）。
-7. **`radar bench` 评分命令 + `bench/last_run.json`**；`radar scan` 双跑逐字节一致（端到端也锁一次）。
+7. **`radar scan` 的双跑逐字节一致**（端到端也锁一次）。
+   > ⚠️ 更正（本棒实测后修）：**`radar bench` 评分命令属 M5，不在 M1**——`stages.py` 里
+   > `bench` 的计划里程碑就是 M5。M1 只交付**生成器 + 真值 + manifest + `--check`**；
+   > 评分与"检出集合精确匹配"的断言是 M5 的主体（`plan/06` M5 节）。
 8. **门禁补充**：生成器 `--check` 加进 CI 步骤；`tools/verify_offline.py` 的 `bench` 用例期望值随交付更新。
 9. **收尾**：M1 DoD 验证 → 回写 `plan/00`（索引 / 台账 / 里程碑）、`plan/05`（R1–R6）、`plan/06` → 写 `HANDOFF-M2.md` → commit。
 
@@ -175,3 +181,89 @@ radar scan --repo .
 
 > **提示**：`radar` 与 `python -m agent_conflict_radar` 是两条通路（`sys.path` 来源不同）。
 > 在源码态未安装时，用 `PYTHONPATH=src py -3.12 -X utf8 -m agent_conflict_radar <命令>`。
+
+---
+
+## 七、M1 进度快照（2026-10-17 冻结，交接给新对话）
+
+> **M1 出口判据未达成 → 不写 `HANDOFF-M2.md`**（纪律：里程碑中断/阻塞时只更新当前 HANDOFF 的
+> 待办区与续接指针，不写虚构的下一棒）。M1 达成后按 §二 的顺序收尾。
+
+### 7.1 已完成并**有证据**的部分
+
+| 项 | 状态 | 证据落点 |
+|---|---|---|
+| **只读探针：会话字段形态**（G-1 / G-2 / G-3 / G-7） | ✅ 完成 | `data/README.md` §6.4（两侧逐字段实测值）+ `versions.py` 模块文档 |
+| **R1 闭环：`merge-tree --write-tree` 形态矩阵** | ✅ 完成（8 种形态 + 只读性实测） | `data/README.md` §6.1 + `plan/07` 决策记录 |
+| **R2 闭环：Codex `apply_patch` 形态** | ✅ 完成（含 `exec` 变体与计数） | `data/README.md` §6.2 |
+| **R3 闭环：Claude `MultiEdit`** | ✅ 完成（**本机 0 次出现** → 不编造，保守降级） | `data/README.md` §6.3 |
+| **`versions.py` 按实测重写** | ✅ 完成（显式版本集合 `claude-jsonl-v1` / `codex-jsonl-v1`） | 源码 + `plan/07` §六 勘误表逐条打勾 |
+| **`discover.py` 实现** | 🔶 **已写、已在合成夹具上跑通一次，但无测试** | 见 7.2 |
+| **`config/radar.toml` 新增 `[scan] max_line_bytes`** | ✅ 完成（`config.py` 模式已同步） | 源码 + `radar config` 输出 |
+| **口径定稿：`conflicts[]` 用 `levels`/`symbols` 集合** | ✅ 定稿并三处同步（原"只报一条最高粒度"与题面场景 3 冲突） | `plan/04` M3 / `plan/05` §4.2 / `plan/07` 决策记录 |
+| **口径定稿：活跃判定用显式 `--now`** | ✅ 定稿（缺省取观测到的最大时间戳） | `plan/07` 决策记录 / `plan/04` M1 |
+
+### 7.2 `discover.py` 的唯一一次实跑证据（合成夹具，只读）
+
+夹具：临时 git 仓库（1 commit）+ 一份仿 Claude 会话（**首行故意放 `last-prompt`**，消息行在第 3 行）
++ 一份仿 Codex 会话（首行 `session_meta`，`payload.cwd` 指向该仓库）。实跑输出：
+
+```
+worktrees: 1
+sessions: 2 ['claude:sess-a.jsonl', 'codex:rollout-1.jsonl']
+cells: 2 [('claude', True), ('codex', True)]        # in_worktree 均为 True
+undetermined: 0
+reference_time: 2026-01-01T00:10:00Z
+双跑逐字节一致: True
+```
+
+**这条证据只说明"能在合成夹具上跑通一次"，不说明"归集正确"**——M1 DoD 要的是
+"对合成日志产出稳定表 + 逐字段对账 + 与真值台账互证"，这些都还没做。
+
+### 7.3 未完成（下一棒的起点，按序）
+
+1. **`discover.py` 的测试**（当前 0 个测试文件覆盖它）：
+   worktree porcelain 逐字段解析（路径含空格 / `detached` / 裸仓库）；首行非消息行的 Claude 文件
+   （`seq` 必须是消息行行号而非 1）；未知格式 → `undetermined(unsupported_format)` + 缺失键 + 点名文件
+   且**不产出空表**；源根不存在 → **exit 3**（不是 exit 0 空结果）；父会话不在扫描范围 →
+   `undetermined(parent_not_found)` 且 `derived_from` 保持 `null`；`cwd` 匹配不到 worktree →
+   `in_worktree=false` 且保留原始 cwd；超长行 → `undetermined(line_too_long)` **不静默截断**；
+   **双跑逐字节一致**（显式传 `--now`）+ 端到端再锁一次。
+2. **`radar scan` 交付（K15 四步，缺一步即幽灵语义）**：
+   * `stages.py` 把 `scan` 挪进 `DELIVERED_COMMANDS`（**当前仍在 `STAGE_NOT_READY`**）；
+   * CLI 接线：`--now`（全局选项）→ `discover.build_workspace_table` → stdout 打 JSON；
+     `--out-dir` 落 `scan.json`（经 `serialize.write_atomic`）；`--window` 覆盖 `window.scan_days`
+     时**需要先给 `Config` 加一个只读覆盖方法**——当前 `Config` **没有** `with_override`，
+     上一版接线因此不可用（已撤回）；
+   * `tools/verify_offline.py` 的 `scan` 用例期望值由 `EXIT_NOT_READY` 改为 `EXIT_OK`，
+     并显式传 `--claude-root` / `--codex-root`（临时目录）与 `--now`；
+   * README 状态表把 `radar scan` 标 ✅、补 `--now` 用法与"`scan` 成功恒为 0，`undetermined` 只提示不改码"。
+3. **`bench/rng.py` + `bench/gen.py`（完全未开始）**：确定性 RNG（**禁 stdlib `random`、禁时钟、禁 set 序**）、
+   场景 1/2/3/4/5/6a/6b（构造几何见 `plan/05` §4.2）、真值 `truth.json` 同步产出（**无 `observed_*` 字段**、
+   带 `geometry` 让期望可独立复算、带反向样例）、`manifest.json` 覆盖度门槛（每类 ≥1 + 集合覆盖）。
+4. **生成器 `--check` 两层断言**（产物形态 + 重跑生成器到临时目录逐字节比对），并把 `--check` 加进 CI 步骤。
+5. **收尾**：M1 DoD 验证 → `plan/00`（索引 / 台账 / 里程碑）、`plan/05`（R4/R5/R6）、`plan/06`（M1 DoD 打勾）
+   → 写 **`HANDOFF-M2.md`** → commit。
+
+### 7.4 冻结时的工作树状态
+
+* `git status` 干净；**M0 全部门禁重新全绿**（见 7.5）。
+* `discover.py` / `versions.py` 已在树里，但 `scan` **仍被阶段表拦截（exit 4）**——**有意为之**：
+  按 K15，没有测试与冒烟的交付不算交付。
+* `cli.py` 的 `_cmd_scan` 接线与全局 `--now` **已按 7.3 的说明撤回**（撤回未验证的接线）；
+  `--now` 的口径决定已落 `plan/07` 决策记录，不会丢。
+
+### 7.5 冻结时的验证记录（实跑）
+
+| 门 | 结果 |
+|---|---|
+| `py -3.8 -X utf8 -m pytest -q` | 122 passed / 1 skipped（exit 0） |
+| `py -3.12 -X utf8 -m pytest -q` | 122 passed / 1 skipped（exit 0） |
+| `py -3.12 -X utf8 tools/verify_offline.py --strict` | 23 用例全过（exit 0） |
+| `py -3.12 -X utf8 tools/verify_mutation.py` | 10 组变异全部被检出，仓库按字节还原（exit 0） |
+| 出题定稿门 `check_topic.py` | 0 FAIL / 0 WARN / 21 PASS |
+| `discover.py` 合成夹具单跑 | 见 7.2（**仅一次，非门禁**） |
+
+> **本棒新增的一条维护纪律**：`discover.py` 里的 `[:400]`（错误详情截断长度）触发了 K5 零内联阈值门禁，
+> 已按"扩词表是正常维护动作"在 `tests/test_config_literals.py` 的 `ALLOWED_LITERALS` 登记并写明理由
+> ——下次遇到同类告警**照此办理**（登记 + 理由），**不要**改判据去放行。

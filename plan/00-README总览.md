@@ -59,7 +59,7 @@
 | 承诺项 | 素材来源 | 交付物内可达性 | 核验方式 | 状态 |
 |---|---|---|---|---|
 | M0 骨架（可安装包 + 退出码契约 + 数值单点 + 编码守卫 + 门禁与变异验证） | 纯标准库；`py -3.8` / `py -3.12` 本机实测 | 随包，零网络；`pip install -e .` 秒装 | 双解释器全量 pytest + `tools/verify_offline.py --strict`（两条通路 23 用例）+ `tools/verify_mutation.py`（10 组变异全部被检出） | ✅ M0 完成（本地等价校验；未接远端，CI 待首推验证） |
-| M1 工作区与会话发现（worktree + 双 harness 会话归集） | `git worktree list --porcelain` ✅ 命令可用；Claude 94 会话全带 `cwd`+`gitBranch` ✅；Codex 220 会话 `session_meta.payload.cwd` 全覆盖 ✅ | 随包，零网络；路径可覆盖 | 合成场景逐字段对账 + 同输入双跑逐字节一致 + 未知格式显式报错 | ⬜ 待 M1 |
+| M1 工作区与会话发现（worktree + 双 harness 会话归集） | `git worktree list --porcelain` ✅ 命令可用；Claude 94 会话全带 `cwd`+`gitBranch` ✅；Codex 220 会话 `session_meta.payload.cwd` 全覆盖 ✅ | 随包，零网络；路径可覆盖 | 合成场景逐字段对账 + 同输入双跑逐字节一致 + 未知格式显式报错 | ⏳ M1 进行中：字段形态与派生关系已实测闭环（`data/README` §6.4），`discover.py` 已写但**未接线、无测试**（见 HANDOFF-M1 §七） |
 | M2 变更意图提取（Edit/Write/apply_patch + git status/diff） | 会话内 `file_path` / `old_string` / `new_string` / `apply_patch` 文本；`git status --porcelain` + `git diff` | 随包 | 合成会话解析对账；无法定位时 `coarse` / `unknown` 而非猜测；同输入同输出 | ⬜ 待 M2 |
 | M3 三级检测（文件 / 区块 / 符号） | `git merge-tree --write-tree` ✅；Python `ast` ✅ | 随包；git 为运行期必需（缺失 exit 3） | 合成冲突矩阵检出集合精确匹配；负样本零误报；只读断言（工作区 hash 前后一致） | ⬜ 待 M3 |
 | M4 预警报告（Markdown + JSON + 可选通知） | M3 冲突清单 | 随包 | 报告排序稳定；退出码四语义测试；通知不可用时 `notify_unavailable` 不影响主流程 | ⬜ 待 M4 |
@@ -95,7 +95,7 @@
 | 里程碑 | 内容 | DoD |
 |---|---|---|
 | **M0 骨架**（2026-10-17 完成） | ①计划文档 02–07 落盘；②可安装骨架（`src` 布局 + 零运行时依赖 + `radar` / `python -m` 双通路）；③数值口径单点 `config/radar.toml` + 自写受限 TOML 子集解析器；④**四件前置工程**（退出码契约锁进测试 / 双解释器全量 pytest / 冻结序列化契约 / 编码守卫进入口）；⑤八组骨架门禁 + `tools/verify_offline.py` + `tools/verify_mutation.py`；⑥CI 四矩阵预置；⑦`plan/HANDOFF-M1.md` | 见 [06-里程碑.md](06-里程碑.md) M0 节。**本地等价校验结果**：`py -3.8`/`py -3.12` 各 **122 passed / 1 skipped**（跳项为"当前文件系统不支持目录符号链接"，声明式跳过并说明原因）；离线冒烟 `--strict` 两条通路 **23 用例全过**；**变异验证 10 组全部被对应守门抓到**（仓库按字节还原）。未接远端 → CI 待首推验证 |
-| **M1 数据先行** | ①worktree + 双 harness 会话归集；②**合成冲突场景矩阵 + 真值台账**（场景 1–5 全覆盖）；③格式版本检测口径；④会话字段核对记录进 data/README | 真值台账入仓可审计；`radar scan` 对合成日志产出稳定表；未知格式显式报错；矩阵一条命令重建 |
+| **M1 数据先行**（⏳ **进行中，中途冻结**：探针与勘误已完成，`discover.py` 已写未接线；交接见 [HANDOFF-M1.md](HANDOFF-M1.md) §七） | ①worktree + 双 harness 会话归集；②**合成冲突场景矩阵 + 真值台账**（场景 1–5 全覆盖）；③格式版本检测口径；④会话字段核对记录进 data/README | 真值台账入仓可审计；`radar scan` 对合成日志产出稳定表；未知格式显式报错；矩阵一条命令重建。**已达成部分**：③ ✅（`data/README` §6.4 + `versions.py` 实测勘误）、④ ✅（`data/README` §六，R1/R2/R3 闭环）；**未达成**：①（已写未交付）、②（未开始） |
 | **M2 意图提取** | Edit/Write/MultiEdit/apply_patch 解析 + `git status`/`git diff` 合并；`coarse`/`unknown` 降级 | 合成会话解析对账；不可定位不猜测；同一输入同输出 |
 | **M3 三级检测** | 文件级 → `merge-tree` 区块级 → AST 符号级；subagent 去重 | 矩阵检出集合精确匹配（多报/漏报均失败）；负样本零误报；只读断言 |
 | **M4 预警报告** | 严重度排序、Markdown + JSON、退出码四语义、可选通知 | 报告稳定；退出码 0/1/2/3 各有测试；通知缺失不失败 |
