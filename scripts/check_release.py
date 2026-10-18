@@ -604,19 +604,64 @@ def check_matrix_machine_independent(ctx: Context) -> List[str]:
     return offenders[:10]
 
 
+def _code_string_literals(source: str) -> List[str]:
+    """取出 Python 源码里**代码位置**的字符串常量（跳过文档字符串与注释）。
+
+    为什么必须跳过：判据是"不得**硬编码**真实主目录"，而文档里写
+    `C:/Users/runneradmin/...` 是在**解释机制**（本仓 K16 的同类门禁早有这条纪律）。
+    CI 首跑实测踩中：Windows runner 的真实用户名恰好是 `runneradmin`，于是一段解释
+    "8.3 短名 vs 长名"的文档字符串被判成泄露，Windows 两条腿全红。
+    """
+    import ast
+
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return []
+    docstring_ids = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            body = getattr(node, "body", [])
+            if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+                if isinstance(body[0].value.value, str):
+                    docstring_ids.add(id(body[0].value))
+    return [
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and id(node) not in docstring_ids
+    ]
+
+
 def check_commit_surface_desensitized(ctx: Context) -> List[str]:
     """C07 提交面脱敏：入库内容 + **提交元数据邮箱**（代码干净 ≠ 提交面干净）。
 
     扫描面取**受控树**（tag 树或 HEAD 树），不是工作区文件：工作区里未跟踪的东西不会进仓库。
+    对 `.py` 只看**代码位置**的字符串常量（文档字符串是解释机制，不是硬编码路径）。
     """
     login = getpass.getuser().lower()
     offenders: List[str] = []
     for rel, raw in sorted(ctx.tree_files().items()):
-        if rel.rsplit(".", 1)[-1].lower() in ("png", "jpg", "jpeg", "gif", "pdf", "zip", "gz"):
+        suffix = rel.rsplit(".", 1)[-1].lower()
+        if suffix in ("png", "jpg", "jpeg", "gif", "pdf", "zip", "gz"):
             continue
         try:
             text = _normalize_newlines(raw.decode("utf-8"))
         except UnicodeDecodeError:
+            continue
+        if suffix == "py":
+            # 逐条字符串常量判断，而不是扫整份文本——否则文档里的示例路径会误报。
+            for literal in _code_string_literals(text):
+                for match in _DRIVE_USER_RE.finditer(literal):
+                    if match.group(1).lower() == login:
+                        offenders.append("%s 含真实用户名 %r" % (rel, match.group(1)))
+                for pattern in (_BASH_HOME_RE, _POSIX_HOME_RE):
+                    for match in pattern.finditer(literal):
+                        if match.group(1).lower() == login:
+                            offenders.append("%s 含真实主目录 %r" % (rel, match.group(0)))
+                if _REAL_UUID_RE.search(literal):
+                    offenders.append("%s 含真实 UUID 形态" % rel)
             continue
         for match in _DRIVE_USER_RE.finditer(text):
             segment = match.group(1).lower()

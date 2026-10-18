@@ -218,3 +218,23 @@ def test_not_published_is_a_fail_not_an_environment_error(gate):
             tag="v9.9.9",
             download_asset=_missing_download,
         ).download_asset("x", REPO_ROOT)
+
+
+def test_c07_ignores_docstrings_but_catches_code_literals(gate):
+    """C07 的判据落点：**代码常量**里的真实主目录才算泄露，文档字符串里的示例路径不算。
+
+    CI 首跑实测：Windows runner 的真实用户名恰好是 `runneradmin`，而源码里有一段解释
+    "8.3 短名 vs 长名"的文档字符串用了 `C:/Users/runneradmin/...` 当例子——
+    整份文本扫描把它判成泄露，Windows 两条腿全红。
+    这与本仓 K16 门禁的既有纪律一致：文档字符串是**解释机制**，不是硬编码路径。
+    """
+    import getpass
+
+    login = getpass.getuser()
+    source = (
+        '"""说明：CI 上的真实主目录形如 C:/Users/runneradmin/AppData。"""\n'
+        'VALUE = "C:/Users/%s/x"\n' % login
+    )
+    literals = gate._code_string_literals(source)
+    assert not any("runneradmin" in item for item in literals), "文档字符串被当成了代码常量"
+    assert any(login in item for item in literals), "代码里的真实主目录被漏掉了"
