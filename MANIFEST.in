@@ -1,0 +1,46 @@
+# 源码包（sdist）内容白名单 —— M6
+#
+# 纪律：这里**只放白名单规则**，不放 `graft bench` / `recursive-include bench *` 这类整目录兜底。
+# 理由：整目录规则会把运行产物（例如 `bench/last_run.json`）与将来出现的临时文件静默带进包里，
+# 而"包里到底多了什么"是发布门 `scripts/check_release.py` 逐条核对的对象（检查项 C10 / C11）：
+#
+#   C10  MANIFEST.in 必须覆盖 `bench/` 下每一个受版本控制的文件，且**恰好**排除运行产物；
+#   C11  真建一份 sdist，逐条核对上面这份覆盖结果（不是只读规则文本）。
+#
+# 改动本文件 = 改发布包的组成，必须同时改 `scripts/check_release.py` 的期望集合与
+# `plan/RELEASE-M6.md` 的「源码包自足」段（否则发布门会红）。
+
+include README.md
+include LICENSE
+include pyproject.toml
+include MANIFEST.in
+
+# 数值口径唯一权威（K3）：CLI 从仓库根解析 pyproject.toml 后据此找它，源码包必须自带。
+recursive-include config *.toml
+
+# 文档与计划：发布留档 `plan/RELEASE-M6.md` 必须随源码包一起分发（DoD ③ 的可审计面）。
+recursive-include docs *.md
+recursive-include plan *.md
+
+# 可复跑的门禁与测试：源码包自带 `tools/` 与 `tests/`，解包即可复核。
+recursive-include tools *.py
+recursive-include tests *.py
+recursive-include scripts *.py
+
+# 合成矩阵（冻结产物；生成器白名单假值，K11）。
+# 只列**实际存在的扩展名**：`.json`（真值/台账/last_run）、`.jsonl`（会话日志）、`.py` / `.md`（场景仓库内容）。
+recursive-include bench *.json
+recursive-include bench *.jsonl
+recursive-include bench *.py
+recursive-include bench *.md
+
+# 显式决定（M6）：`bench/last_run.json` 是**运行产物**——`radar bench` 每次整矩阵运行都会重写，
+# 它记录的是"某一次判定"，不是源码内容。因此**不进源码包**；这与 `bench.gen.RUNTIME_PRODUCTS`
+# 的放行口径一致（那边放行是为了 `--check` 不把运行产物当生成物，这边排除是为了包里只放源码）。
+exclude bench/last_run.json
+
+# 防御性排除：即便将来有人加了宽规则，运行产物/缓存也不得入包。
+prune out
+prune dist
+prune build
+global-exclude __pycache__ *.py[cod] .DS_Store Thumbs.db
