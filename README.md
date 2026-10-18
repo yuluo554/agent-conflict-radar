@@ -6,11 +6,17 @@
 
 ---
 
-## ✅ 当前状态：M6 已交付（2026-10-18），命令面 7/7，发布门离线 10 条 + 在线 6 条
+## ✅ 已发布：v0.0.1（2026-10-18），命令面 7/7
 
 七条命令全部落地，合成冲突矩阵与意图矩阵已入仓可审计，`radar bench` 可**一键复跑评分**。
+
+**发布物**：[Release v0.0.1](https://github.com/yuluo554/agent-conflict-radar/releases/tag/v0.0.1)
+附**手工上传**的源码包 `agent_conflict_radar-0.0.1.tar.gz`
+（sha256 `f19688f1d6338b2adc3455bcc3b216e0c0633fda1eafa73da0598ddfa14347ab`，登记在
+`plan/release-assets.json`）。CI 四矩阵 `windows/ubuntu × 3.8/3.12` 全绿。
+
 `scripts/check_release.py` 是**发布终态自检门**（离线 C01–C11 / 在线 O01–O07，刻意不进 CI），
-它自己也做了 18 组变异验证（**检查项数 == 变异组数**）。
+总共 18 条检查、18 组门自身变异（**检查项数 == 变异组数**），发布时 `--online` 无 FAIL。
 
 | 命令 | 状态 | 计划里程碑 |
 |---|---|---|

@@ -140,7 +140,95 @@ GitHub 仓库名 `agent-conflict-radar`；`pyproject.toml` 的 `name = "agent-co
 ## 八、tag 后追加事实
 
 > ⚠️ **本节只在 tag 之后追加**，不修改上文任何内容。每条都写**真实 UTC 时刻**与可复跑命令。
+> 本节首次落地：2026-10-18T08:15Z。
 
-（待发布执行后填写。计划登记项：建仓时刻 / push 时刻 / CI 首跑 run id 与结论（含失败轮次）/
-tag 对象 sha 与指向的 commit / Release 附件名 + 字节数 + sha256 / `--online` 门运行结果 /
-中立目录解包 selftest 结果。）
+### 8.1 时间线（全部真实 UTC）
+
+| 时刻（UTC） | 动作 | 结果 |
+|---|---|---|
+| 2026-10-18T06:32:29Z | `gh repo create yuluo554/agent-conflict-radar --public` | 公开仓库创建成功 |
+| 2026-10-18T06:32:39Z | `git push -u origin main`（提交 `c27a171`） | 推送成功 |
+| 2026-10-18T06:40:27Z | CI 首跑（run `39104421327`）结束 | ❌ **四腿全红**（照录，未抹除） |
+| 2026-10-18T07:20Z | 第二轮（`dd4f304`，run `39106857401`） | ❌ Windows 两腿红（ubuntu 已绿） |
+| 2026-10-18T07:35Z | 第三轮（`b954155`，run `39107533253`） | ❌ Windows 两腿红（仅 1 条测试） |
+| 2026-10-18T07:44:39Z | 第四轮（`ded85f8`，run `39108203623`） | ✅ **四腿全绿** |
+| 2026-10-18T07:44:39Z | `git tag -a v0.0.1`（annotated，tagger 邮箱为 GitHub noreply） | tag 对象 `bf26e6f1…` → commit `ded85f8` |
+| 2026-10-18T07:47Z | `git push origin v0.0.1` | tag push 触发 run `39108822514` |
+| 2026-10-18T07:52Z | tag push 的 CI 结束 | ✅ **四腿全绿** |
+| 2026-10-18T07:55:35Z | `gh release create v0.0.1` + 手工上传附件 | Release 创建成功 |
+| 2026-10-18T07:55:47Z | `--record-assets` → `plan/release-assets.json` | 登记 1 个附件；追加提交 `b6c7ec1` |
+| 2026-10-18T08:03:50Z | 登记提交的 CI（run `39109515916`） | ❌ 四腿红（`test_not_published_...` 前提过时，已在下一提交修复） |
+| 2026-10-18T08:12Z | 发布门判据修正提交 `f953821`（run `39110126482`） | ✅ **四腿全绿** |
+
+### 8.2 CI 首跑失败的原因（**照录，不抹除**）
+
+首跑四腿全红，暴露两个**本地同平台跑不出来**的真实缺陷：
+
+1. **ubuntu 两腿**：`intent._is_clean_relative("C:/abs/a.py")` 在 POSIX 上返回 `True`
+   ——`os.path.isabs` 不认盘符，于是盘符式绝对路径被判成"干净的相对路径"。
+   修复：加 `_DRIVE_ABSOLUTE_RE` 与 POSIX 绝对路径两条显式判据（跨平台一致）。
+2. **windows 两腿**：runner 的 `TEMP` 是 **8.3 短名**（`C:/Users/RUNNER~1/...`），而
+   `git worktree list` 报长名（`C:/Users/runneradmin/...`）。只做 `normcase(normpath())`
+   时前缀对不上 → 每个会话都被判成 `in_worktree=False` → **整棵矩阵一个冲突都不产出**
+   （而 `scan`/`intent` 层看起来还"正常"）。修复：`discover._norm()` 先 `realpath` 再归一。
+3. 第三轮 Windows 仍红：`C07` 脱敏判据把**文档字符串里解释机制的示例路径**当成泄露
+   （runner 的真实用户名恰好与示例里的相同）。修复：`.py` 只看**代码位置**的字符串常量
+   （与本仓 K16 门禁的既有纪律一致）。
+4. 登记提交那轮的失败：`test_not_published_...` 仍假设"仓库没有附件登记"，登记落地后前提过时。
+   修复：改用空临时根构造"未发布"世界。
+
+### 8.3 发布门（`--online`）终态
+
+运行：`python scripts/check_release.py --online --tag v0.0.1`
+结果：**18 条检查无 FAIL，退出码 0**（离线 C01–C11 + 在线 O01–O07）。
+
+其中 O04 与 O07 在真实发布时各暴露一次判据错误，已修正并各配回归测试：
+
+* **O04**：计数单位改为 `(提交, workflow, 事件来源)`。发布提交被 branch push 与 tag push
+  各推一次是**正确形态**；按提交计数会让发布提交必红。
+* **O07**：期望集合改为 `MANIFEST 覆盖 ∪ setuptools 自动纳入的 src/*.py`，并排除运行产物。
+  源码包**本来就不该**含 `.gitignore` / `.github/` / `bench/last_run.json`；
+  首版要求"tag 树 ⊆ 包"，等于把源码包当成整仓快照。
+
+### 8.4 附件（手工上传，非 zipball）
+
+| 项 | 值 |
+|---|---|
+| 名称 | `agent_conflict_radar-0.0.1.tar.gz` |
+| 字节数 | `417182` |
+| sha256 | `f19688f1d6338b2adc3455bcc3b216e0c0633fda1eafa73da0598ddfa14347ab` |
+| 构建路径 | `scripts/check_release.py --build-asset dist/release --tag v0.0.1`（`git archive v0.0.1` → 受控树 → sdist → 归档归一） |
+| 本地副本 | `dist/release/agent_conflict_radar-0.0.1.tar.gz`（git 忽略；sha256 登记在 `plan/release-assets.json`） |
+| 可复现性 | 同一 tag 连跑两次 sha256 **完全相同**（门 C11 钉住） |
+| 远端复核 | O05（集合+字节数）、O06（**真下载**复算 sha256）、O07（与 tag 树逐字节同源）全部 PASS |
+
+**zip/tar 内不含自身 sha256**（K17 自指必过期）；sha256 只出现在 `plan/release-assets.json`
+（tag 之后的追加提交）。
+
+### 8.5 「解压即用」实证（中立目录）
+
+在**解包目录之外**的中立目录运行，工作目录零残留：
+
+```
+下载件 sha256 = f19688f1…47ab  （与登记一致）
+PYTHONPATH=<解包>/agent_conflict_radar-0.0.1/src python -m agent_conflict_radar --version
+  → agent-conflict-radar 0.0.1
+… selftest
+  → 自检通过：配置 / 退出码契约 / 序列化契约 / 阶段表 / 包版本 五项正常。
+… bench --bench-dir <解包>/agent_conflict_radar-0.0.1/bench
+  → 15/15 场景、174 项检查、覆盖度达标、exit 0
+中立目录文件数（跑完后）：0
+```
+
+### 8.6 发布门修正带来的仓内变更（tag 之后，**不改 tag 树**）
+
+tag `v0.0.1` **仍指向 `ded85f8`**。以下内容都是 tag 之后在 `main` 上的追加提交，
+属于"发布工具与留档的修正"，不改变已发布的包内容：
+
+| 提交 | 内容 |
+|---|---|
+| `b6c7ec1` | 附件 sha256 登记 `plan/release-assets.json` |
+| `f953821` | 发布门 O04 / O07 判据修正 + 3 条回归测试（**包内容未变**，见下条核验） |
+
+**核验"包未变"**：`--build-asset --tag v0.0.1` 仍然只读 tag 树，重算 sha256 仍为
+`f19688f1…47ab`（门 C11 与 O07 都对着这条断言）。发布门的修正只改**判据**，不改**产物**。

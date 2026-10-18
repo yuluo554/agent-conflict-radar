@@ -108,7 +108,7 @@
 | **M3 三级检测**（2026-10-18 完成） | ①`detect.py` 三级实现（文件级 = 两个活跃 `(workspace, session)` 组同改同一文件；②区块级 = 两侧分支 `git merge-tree --write-tree` 的冲突路径；③符号级 = `HEAD` 版本 AST 的同一 / 相邻符号）；④`gitio.merge_tree` 只读封装（白名单 / 超时 / 输出解析）；⑤`derived_from` 去重（场景 4）；⑥只读断言测试 | 见 [06-里程碑.md](06-里程碑.md) M3 节「收尾结论」。**本地等价校验结果**：`py -3.8`/`py -3.12` 各 **299 passed / 1 skipped**；离线冒烟 `--strict` **29 用例全过**；**变异验证 29 组**全部被对应守门抓到；七条冻结场景的 `levels` / `symbols` 集合精确匹配（多报漏报均失败），三态（`degraded` / `approximate` / `unsupported_format`）各有合成用例。**M3 未新增冻结场景、未改冻结产物**（检出对账复用 M1 冲突矩阵）。未接远端 → CI 待首推验证 |
 | **M4 预警报告**（2026-10-18 完成） | ①`report.py`：Markdown + JSON **单一渲染源**（JSON = `detect` 的 `conflicts.json`，Markdown 是它的纯函数）；②严重度降序 + `(level, path, symbols)` 稳定排序；③建议是**规则模板**（按 `severity_key` 分派）；④`undetermined` 独立小节逐条列出；⑤参数来源块只引用键名（不复制数值）；⑥可选通知 + `notify_unavailable` | 见 [06-里程碑.md](06-里程碑.md) M4 节「收尾结论」。**本地等价校验结果**：`py -3.8`/`py -3.12` 各 **336 passed / 1 skipped**；离线冒烟 `--strict` **35 用例全过**（report 模块通路 5 条 + console 通路 3 条）；**变异验证 33 组**全部被对应守门抓到。渲染三律各有实物：AST 零判定门禁（含可证伪探针）/ 零外链常驻渲染出口（带 URL 的 payload 当场抛错）/ 双跑逐字节一致（真子进程）。**M4 未新增冻结场景、未改冻结产物**。未接远端 → CI 待首推验证 |
 | **M5 基准与自检**（2026-10-18 完成） | 完整冲突矩阵、覆盖度门槛、`radar bench` 一条命令评分 | 见 [06-里程碑.md](06-里程碑.md) M5 节。**本地等价校验结果**：`py -3.8`/`py -3.12` 各 **365 passed / 1 skipped**；离线冒烟 `--strict` **38 用例全过**；**变异验证 36 组**全部被对应守门抓到；`radar bench` 整矩阵 **15/15 场景、174 项检查**，exit 0；干净 venv + 干净 clone（`--no-local`）实跑全过。未接远端 → CI 待首推验证 |
-| **M6 发布**（本地面 2026-10-18 完成，**远程面待执行**） | 发布 GitHub **公开**仓库 | **DoD 三件套**：①`git tag`；②**GitHub Release 附产物**（源码 zip，本地留副本 + **sha256 留档可复验**）；③**发布留档文件**（`plan/RELEASE-M6.md`，**在 tag 之前写好并进 tag 树**）。另：发布前跑 `scripts/check_release.py` 无 FAIL；提交面脱敏全 0（含 tag tagger 邮箱）；tag 后事实（附件 sha256 / 下载复核）作为**追加提交**分栏记录。**本轮已交付**：发布门（离线 C01–C11 + 在线 O01–O07 + 18 组门自身变异，本机 11/11 PASS、18↔18 全抓到）、`MANIFEST.in` 白名单（101 个 bench 文件入包、`last_run.json` 显式排除）、tag 前留档；**未执行**：建仓 / push / CI / tag / Release（属对外动作，须用户确认） |
+| **M6 发布**（2026-10-18 **完成**） | 发布 GitHub **公开**仓库 | **DoD 三件套全部达成**：①annotated tag `v0.0.1`（tag 对象 `bf26e6f1…`）指向 CI 绿的 `ded85f8`；②GitHub Release 带**手工上传**源码包 `agent_conflict_radar-0.0.1.tar.gz`（417182 B，sha256 `f19688f1…47ab`，登记在 `plan/release-assets.json`），**未**用仓库 zipball 替代；③`plan/RELEASE-M6.md` 进 tag 树，tag 后事实追加在 §八。**CI**：`39104421327` 首跑四腿全红（照录），修复 3 个跨平台缺陷后 `39108203623` 四腿全绿、tag push `39108822514` 四腿全绿。**发布门**：`scripts/check_release.py --online --tag v0.0.1` → **18 条检查无 FAIL，exit 0**。**解压即用**：中立目录跑 `--version` / `selftest` / `bench`（15/15、174 项）全过，CWD 零残留 |
 
 **M6 DoD 口径锁定**：采用 **A) "Release 附产物"**——源码 zip 为手工上传附件，本地必须存在同名副本与 sha256 留档，**不得**以"仓库 zipball 即产物"替代。三件套缺任一项即视为发布未达成。
 
@@ -322,8 +322,8 @@
 
 | 等价物 | 结果 |
 |---|---|
-| `py -3.8 -X utf8 -m pytest -q` | **385 passed / 1 skipped**（M5 为 365/1；`tests/test_release_gate.py` 20 条） |
-| `py -3.12 -X utf8 -m pytest -q` | **385 passed / 1 skipped** |
+| `py -3.8 -X utf8 -m pytest -q` | **391 passed / 1 skipped**（M5 为 365/1；`tests/test_release_gate.py` 20 条） |
+| `py -3.12 -X utf8 -m pytest -q` | **391 passed / 1 skipped** |
 | `py -3.12 -X utf8 tools/verify_offline.py --strict` | **38 用例全过** |
 | `radar bench`（整矩阵） | **15/15 场景、174 项检查、覆盖度达标**，exit 0 |
 | `python -m agent_conflict_radar.bench.gen --check` | 两层断言 + 提交 sha 复算全过 |
