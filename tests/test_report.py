@@ -693,5 +693,6 @@ def test_count_columns_are_presented_separately_with_their_own_semantics(tmp_pat
 
 
 def test_report_is_not_staged_anymore():
+    """K15 退役纪律：`report` 在交付表里，且"未就绪"这张表已整条退役（M5，K1 四步）。"""
     assert "report" in stages.DELIVERED_COMMANDS
-    assert "report" not in stages.STAGE_NOT_READY
+    assert not hasattr(stages, "STAGE_NOT_READY"), "命令面 7/7 已全部交付：不应再有未就绪表"

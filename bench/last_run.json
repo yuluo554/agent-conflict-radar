@@ -1,0 +1,2673 @@
+{
+  "bench": {
+    "counting_unit": "用例条目数（一条场景一条）",
+    "generator_version": "m2-1",
+    "kinds": [
+      "conflict",
+      "intent"
+    ],
+    "parameter_source": {
+      "config_relative_path": "config/radar.toml",
+      "keys": [
+        "window.active_minutes",
+        "window.scan_days",
+        "symbol.adjacent_tolerance",
+        "symbol.min_overlap_lines",
+        "severity.same_symbol",
+        "severity.same_file_diff_symbol",
+        "severity.adjacent_lines",
+        "severity.file_only",
+        "git.merge_tree_enabled",
+        "git.timeout_seconds"
+      ],
+      "note": "数值只有一个来源：config/radar.toml（K3）。本产物不复制任何数值，只登记键名。"
+    },
+    "reference_time": "2026-01-01T00:10:00Z"
+  },
+  "global_checks": [
+    {
+      "actual": [],
+      "expected": [],
+      "extra": [],
+      "missing": [],
+      "name": "manifest.conflict.truth_sha256",
+      "verdict": "pass"
+    },
+    {
+      "actual": {
+        "negative_no_overlap": 1,
+        "same_file_diff_symbol": 1,
+        "same_symbol_diff_lines": 1,
+        "subagent_derived": 1,
+        "threshold_adjacent": 2,
+        "whole_file_overwrite": 1
+      },
+      "expected": {
+        "negative_no_overlap": 1,
+        "same_file_diff_symbol": 1,
+        "same_symbol_diff_lines": 1,
+        "subagent_derived": 1,
+        "threshold_adjacent": 2,
+        "whole_file_overwrite": 1
+      },
+      "extra": [],
+      "missing": [],
+      "name": "coverage.conflict.count_by_type",
+      "verdict": "pass"
+    },
+    {
+      "actual": [],
+      "expected": [],
+      "extra": [],
+      "missing": [],
+      "name": "coverage.conflict.min_count_by_type",
+      "verdict": "pass"
+    },
+    {
+      "actual": [],
+      "expected": [],
+      "extra": [],
+      "missing": [],
+      "name": "coverage.conflict.missing_types",
+      "verdict": "pass"
+    },
+    {
+      "actual": [],
+      "expected": [],
+      "extra": [],
+      "missing": [],
+      "name": "coverage.conflict.missing_types_matches",
+      "verdict": "pass"
+    },
+    {
+      "actual": [
+        "negative_no_overlap",
+        "same_file_diff_symbol",
+        "same_symbol_diff_lines",
+        "subagent_derived",
+        "threshold_exact",
+        "threshold_near_miss",
+        "whole_file_overwrite"
+      ],
+      "expected": [
+        "negative_no_overlap",
+        "same_file_diff_symbol",
+        "same_symbol_diff_lines",
+        "subagent_derived",
+        "threshold_exact",
+        "threshold_near_miss",
+        "whole_file_overwrite"
+      ],
+      "extra": [],
+      "missing": [],
+      "name": "manifest.conflict.scenario_set",
+      "verdict": "pass"
+    },
+    {
+      "actual": [],
+      "expected": [],
+      "extra": [],
+      "missing": [],
+      "name": "manifest.intent.truth_sha256",
+      "verdict": "pass"
+    },
+    {
+      "actual": {
+        "intent_precision": 8,
+        "non_python_approximate": 1
+      },
+      "expected": {
+        "intent_precision": 8,
+        "non_python_approximate": 1
+      },
+      "extra": [],
+      "missing": [],
+      "name": "coverage.intent.count_by_type",
+      "verdict": "pass"
+    },
+    {
+      "actual": [],
+      "expected": [],
+      "extra": [],
+      "missing": [],
+      "name": "coverage.intent.min_count_by_type",
+      "verdict": "pass"
+    },
+    {
+      "actual": [],
+      "expected": [],
+      "extra": [],
+      "missing": [],
+      "name": "coverage.intent.missing_types",
+      "verdict": "pass"
+    },
+    {
+      "actual": [],
+      "expected": [],
+      "extra": [],
+      "missing": [],
+      "name": "coverage.intent.missing_types_matches",
+      "verdict": "pass"
+    },
+    {
+      "actual": [
+        "intent_ambiguous_anchor_coarse",
+        "intent_codex_exec_patch",
+        "intent_disk_wins",
+        "intent_edit_exact",
+        "intent_multi_edit_unknown",
+        "intent_multi_write_merge",
+        "intent_replace_all_coarse",
+        "intent_write_and_non_python"
+      ],
+      "expected": [
+        "intent_ambiguous_anchor_coarse",
+        "intent_codex_exec_patch",
+        "intent_disk_wins",
+        "intent_edit_exact",
+        "intent_multi_edit_unknown",
+        "intent_multi_write_merge",
+        "intent_replace_all_coarse",
+        "intent_write_and_non_python"
+      ],
+      "extra": [],
+      "missing": [],
+      "name": "manifest.intent.scenario_set",
+      "verdict": "pass"
+    },
+    {
+      "actual": [],
+      "expected": [],
+      "extra": [],
+      "missing": [],
+      "name": "coverage.conflict.threshold_pair",
+      "verdict": "pass"
+    },
+    {
+      "actual": [],
+      "expected": [],
+      "extra": [],
+      "missing": [],
+      "name": "manifest.truth_files_present",
+      "verdict": "pass"
+    }
+  ],
+  "notes": [
+    "抽样覆盖非穷举：本基准声明的是「每类至少一条 + 集合覆盖」，不是穷举所有几何。",
+    "评分只读真值：实际检出写进本产物，不回写真值（K9）。",
+    "阈值只在 config/radar.toml 定义；本产物只登记键名，不复制数值（K3）。",
+    "参考时刻是固定常量，不读系统时钟——同一矩阵任何时候跑都得到同一判定。",
+    "覆盖度门槛与台账 sha 复核通过。"
+  ],
+  "only": null,
+  "scenarios": [
+    {
+      "actual": {
+        "exit_code": 1,
+        "levels": [
+          "file"
+        ],
+        "objects": [
+          [
+            "src/alpha.py",
+            null
+          ]
+        ],
+        "sessions": [
+          "sess-radar-0001",
+          "sess-radar-0002"
+        ],
+        "symbols": []
+      },
+      "checks": [
+        {
+          "actual": [
+            "sess-radar-0001",
+            "sess-radar-0002"
+          ],
+          "expected": [
+            "sess-radar-0001",
+            "sess-radar-0002"
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "scan.sessions",
+          "verdict": "pass"
+        },
+        {
+          "actual": [
+            [
+              "src/alpha.py",
+              "sess-radar-0001"
+            ],
+            [
+              "src/alpha.py",
+              "sess-radar-0002"
+            ]
+          ],
+          "expected": [
+            [
+              "src/alpha.py",
+              "sess-radar-0001"
+            ],
+            [
+              "src/alpha.py",
+              "sess-radar-0002"
+            ]
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "intent.path_sessions",
+          "verdict": "pass"
+        },
+        {
+          "actual": [
+            "file"
+          ],
+          "expected": [
+            "file"
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "detect.levels",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.symbols",
+          "verdict": "pass"
+        },
+        {
+          "actual": [
+            [
+              "src/alpha.py",
+              null
+            ]
+          ],
+          "expected": [
+            [
+              "src/alpha.py",
+              null
+            ]
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "detect.objects",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.forbidden_objects",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.forbidden_levels",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.forbidden_symbols",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "detect.exit_code",
+          "verdict": "pass"
+        }
+      ],
+      "expected": {
+        "exit_code": 1,
+        "levels": [
+          "file"
+        ],
+        "objects": [
+          [
+            "src/alpha.py",
+            null
+          ]
+        ],
+        "sessions": [
+          "sess-radar-0001",
+          "sess-radar-0002"
+        ],
+        "symbols": []
+      },
+      "id": "same_file_diff_symbol",
+      "kind": "conflict",
+      "types": [
+        "same_file_diff_symbol"
+      ],
+      "verdict": "pass"
+    },
+    {
+      "actual": {
+        "exit_code": 1,
+        "levels": [
+          "file",
+          "symbol"
+        ],
+        "objects": [
+          [
+            "src/alpha.py",
+            "f"
+          ]
+        ],
+        "sessions": [
+          "sess-radar-0003",
+          "sess-radar-0004"
+        ],
+        "symbols": [
+          "f"
+        ]
+      },
+      "checks": [
+        {
+          "actual": [
+            "sess-radar-0003",
+            "sess-radar-0004"
+          ],
+          "expected": [
+            "sess-radar-0003",
+            "sess-radar-0004"
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "scan.sessions",
+          "verdict": "pass"
+        },
+        {
+          "actual": [
+            [
+              "src/alpha.py",
+              "sess-radar-0003"
+            ],
+            [
+              "src/alpha.py",
+              "sess-radar-0004"
+            ]
+          ],
+          "expected": [
+            [
+              "src/alpha.py",
+              "sess-radar-0003"
+            ],
+            [
+              "src/alpha.py",
+              "sess-radar-0004"
+            ]
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "intent.path_sessions",
+          "verdict": "pass"
+        },
+        {
+          "actual": [
+            "file",
+            "symbol"
+          ],
+          "expected": [
+            "file",
+            "symbol"
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "detect.levels",
+          "verdict": "pass"
+        },
+        {
+          "actual": [
+            "f"
+          ],
+          "expected": [
+            "f"
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "detect.symbols",
+          "verdict": "pass"
+        },
+        {
+          "actual": [
+            [
+              "src/alpha.py",
+              "f"
+            ]
+          ],
+          "expected": [
+            [
+              "src/alpha.py",
+              "f"
+            ]
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "detect.objects",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.forbidden_objects",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.forbidden_levels",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.forbidden_symbols",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "detect.exit_code",
+          "verdict": "pass"
+        }
+      ],
+      "expected": {
+        "exit_code": 1,
+        "levels": [
+          "file",
+          "symbol"
+        ],
+        "objects": [
+          [
+            "src/alpha.py",
+            "f"
+          ]
+        ],
+        "sessions": [
+          "sess-radar-0003",
+          "sess-radar-0004"
+        ],
+        "symbols": [
+          "f"
+        ]
+      },
+      "id": "same_symbol_diff_lines",
+      "kind": "conflict",
+      "types": [
+        "same_symbol_diff_lines"
+      ],
+      "verdict": "pass"
+    },
+    {
+      "actual": {
+        "exit_code": 1,
+        "levels": [
+          "block",
+          "file",
+          "symbol"
+        ],
+        "objects": [
+          [
+            "src/alpha.py",
+            "f"
+          ]
+        ],
+        "sessions": [
+          "sess-radar-0005",
+          "sess-radar-0006"
+        ],
+        "symbols": [
+          "f"
+        ]
+      },
+      "checks": [
+        {
+          "actual": [
+            "sess-radar-0005",
+            "sess-radar-0006"
+          ],
+          "expected": [
+            "sess-radar-0005",
+            "sess-radar-0006"
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "scan.sessions",
+          "verdict": "pass"
+        },
+        {
+          "actual": [
+            [
+              "src/alpha.py",
+              "sess-radar-0005"
+            ],
+            [
+              "src/alpha.py",
+              "sess-radar-0006"
+            ]
+          ],
+          "expected": [
+            [
+              "src/alpha.py",
+              "sess-radar-0005"
+            ],
+            [
+              "src/alpha.py",
+              "sess-radar-0006"
+            ]
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "intent.path_sessions",
+          "verdict": "pass"
+        },
+        {
+          "actual": [
+            "block",
+            "file",
+            "symbol"
+          ],
+          "expected": [
+            "block",
+            "file",
+            "symbol"
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "detect.levels",
+          "verdict": "pass"
+        },
+        {
+          "actual": [
+            "f"
+          ],
+          "expected": [
+            "f"
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "detect.symbols",
+          "verdict": "pass"
+        },
+        {
+          "actual": [
+            [
+              "src/alpha.py",
+              "f"
+            ]
+          ],
+          "expected": [
+            [
+              "src/alpha.py",
+              "f"
+            ]
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "detect.objects",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.forbidden_objects",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.forbidden_levels",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.forbidden_symbols",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "detect.exit_code",
+          "verdict": "pass"
+        }
+      ],
+      "expected": {
+        "exit_code": 1,
+        "levels": [
+          "block",
+          "file",
+          "symbol"
+        ],
+        "objects": [
+          [
+            "src/alpha.py",
+            "f"
+          ]
+        ],
+        "sessions": [
+          "sess-radar-0005",
+          "sess-radar-0006"
+        ],
+        "symbols": [
+          "f"
+        ]
+      },
+      "id": "whole_file_overwrite",
+      "kind": "conflict",
+      "types": [
+        "whole_file_overwrite"
+      ],
+      "verdict": "pass"
+    },
+    {
+      "actual": {
+        "exit_code": 0,
+        "levels": [],
+        "objects": [],
+        "sessions": [
+          "sess-radar-0007",
+          "sess-radar-0008",
+          "sess-radar-0009"
+        ],
+        "symbols": []
+      },
+      "checks": [
+        {
+          "actual": [
+            "sess-radar-0007",
+            "sess-radar-0008",
+            "sess-radar-0009"
+          ],
+          "expected": [
+            "sess-radar-0007",
+            "sess-radar-0008",
+            "sess-radar-0009"
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "scan.sessions",
+          "verdict": "pass"
+        },
+        {
+          "actual": [
+            [
+              "src/alpha.py",
+              "sess-radar-0008"
+            ],
+            [
+              "src/alpha.py",
+              "sess-radar-0009"
+            ]
+          ],
+          "expected": [
+            [
+              "src/alpha.py",
+              "sess-radar-0008"
+            ],
+            [
+              "src/alpha.py",
+              "sess-radar-0009"
+            ]
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "intent.path_sessions",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.levels",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.symbols",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.objects",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.forbidden_objects",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.forbidden_levels",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.forbidden_symbols",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "detect.exit_code",
+          "verdict": "pass"
+        }
+      ],
+      "expected": {
+        "exit_code": 0,
+        "levels": [],
+        "objects": [],
+        "sessions": [
+          "sess-radar-0007",
+          "sess-radar-0008",
+          "sess-radar-0009"
+        ],
+        "symbols": []
+      },
+      "id": "subagent_derived",
+      "kind": "conflict",
+      "types": [
+        "subagent_derived"
+      ],
+      "verdict": "pass"
+    },
+    {
+      "actual": {
+        "exit_code": 0,
+        "levels": [],
+        "objects": [],
+        "sessions": [
+          "sess-radar-0010",
+          "sess-radar-0011"
+        ],
+        "symbols": []
+      },
+      "checks": [
+        {
+          "actual": [
+            "sess-radar-0010",
+            "sess-radar-0011"
+          ],
+          "expected": [
+            "sess-radar-0010",
+            "sess-radar-0011"
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "scan.sessions",
+          "verdict": "pass"
+        },
+        {
+          "actual": [
+            [
+              "src/alpha.py",
+              "sess-radar-0010"
+            ],
+            [
+              "src/beta.py",
+              "sess-radar-0011"
+            ]
+          ],
+          "expected": [
+            [
+              "src/alpha.py",
+              "sess-radar-0010"
+            ],
+            [
+              "src/beta.py",
+              "sess-radar-0011"
+            ]
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "intent.path_sessions",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.levels",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.symbols",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.objects",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.forbidden_objects",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.forbidden_levels",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.forbidden_symbols",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "detect.exit_code",
+          "verdict": "pass"
+        }
+      ],
+      "expected": {
+        "exit_code": 0,
+        "levels": [],
+        "objects": [],
+        "sessions": [
+          "sess-radar-0010",
+          "sess-radar-0011"
+        ],
+        "symbols": []
+      },
+      "id": "negative_no_overlap",
+      "kind": "conflict",
+      "types": [
+        "negative_no_overlap"
+      ],
+      "verdict": "pass"
+    },
+    {
+      "actual": {
+        "exit_code": 1,
+        "levels": [
+          "file",
+          "symbol"
+        ],
+        "objects": [
+          [
+            "src/alpha.py",
+            "f"
+          ],
+          [
+            "src/alpha.py",
+            "g"
+          ]
+        ],
+        "sessions": [
+          "sess-radar-0012",
+          "sess-radar-0013"
+        ],
+        "symbols": [
+          "f",
+          "g"
+        ]
+      },
+      "checks": [
+        {
+          "actual": [
+            "sess-radar-0012",
+            "sess-radar-0013"
+          ],
+          "expected": [
+            "sess-radar-0012",
+            "sess-radar-0013"
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "scan.sessions",
+          "verdict": "pass"
+        },
+        {
+          "actual": [
+            [
+              "src/alpha.py",
+              "sess-radar-0012"
+            ],
+            [
+              "src/alpha.py",
+              "sess-radar-0013"
+            ]
+          ],
+          "expected": [
+            [
+              "src/alpha.py",
+              "sess-radar-0012"
+            ],
+            [
+              "src/alpha.py",
+              "sess-radar-0013"
+            ]
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "intent.path_sessions",
+          "verdict": "pass"
+        },
+        {
+          "actual": [
+            "file",
+            "symbol"
+          ],
+          "expected": [
+            "file",
+            "symbol"
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "detect.levels",
+          "verdict": "pass"
+        },
+        {
+          "actual": [
+            "f",
+            "g"
+          ],
+          "expected": [
+            "f",
+            "g"
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "detect.symbols",
+          "verdict": "pass"
+        },
+        {
+          "actual": [
+            [
+              "src/alpha.py",
+              "f"
+            ],
+            [
+              "src/alpha.py",
+              "g"
+            ]
+          ],
+          "expected": [
+            [
+              "src/alpha.py",
+              "f"
+            ],
+            [
+              "src/alpha.py",
+              "g"
+            ]
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "detect.objects",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.forbidden_objects",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.forbidden_levels",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.forbidden_symbols",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "detect.exit_code",
+          "verdict": "pass"
+        }
+      ],
+      "expected": {
+        "exit_code": 1,
+        "levels": [
+          "file",
+          "symbol"
+        ],
+        "objects": [
+          [
+            "src/alpha.py",
+            "f"
+          ],
+          [
+            "src/alpha.py",
+            "g"
+          ]
+        ],
+        "sessions": [
+          "sess-radar-0012",
+          "sess-radar-0013"
+        ],
+        "symbols": [
+          "f",
+          "g"
+        ]
+      },
+      "id": "threshold_exact",
+      "kind": "conflict",
+      "types": [
+        "threshold_adjacent"
+      ],
+      "verdict": "pass"
+    },
+    {
+      "actual": {
+        "exit_code": 1,
+        "levels": [
+          "file"
+        ],
+        "objects": [
+          [
+            "src/alpha.py",
+            null
+          ]
+        ],
+        "sessions": [
+          "sess-radar-0014",
+          "sess-radar-0015"
+        ],
+        "symbols": []
+      },
+      "checks": [
+        {
+          "actual": [
+            "sess-radar-0014",
+            "sess-radar-0015"
+          ],
+          "expected": [
+            "sess-radar-0014",
+            "sess-radar-0015"
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "scan.sessions",
+          "verdict": "pass"
+        },
+        {
+          "actual": [
+            [
+              "src/alpha.py",
+              "sess-radar-0014"
+            ],
+            [
+              "src/alpha.py",
+              "sess-radar-0015"
+            ]
+          ],
+          "expected": [
+            [
+              "src/alpha.py",
+              "sess-radar-0014"
+            ],
+            [
+              "src/alpha.py",
+              "sess-radar-0015"
+            ]
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "intent.path_sessions",
+          "verdict": "pass"
+        },
+        {
+          "actual": [
+            "file"
+          ],
+          "expected": [
+            "file"
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "detect.levels",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.symbols",
+          "verdict": "pass"
+        },
+        {
+          "actual": [
+            [
+              "src/alpha.py",
+              null
+            ]
+          ],
+          "expected": [
+            [
+              "src/alpha.py",
+              null
+            ]
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "detect.objects",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.forbidden_objects",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.forbidden_levels",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "detect.forbidden_symbols",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "detect.exit_code",
+          "verdict": "pass"
+        }
+      ],
+      "expected": {
+        "exit_code": 1,
+        "levels": [
+          "file"
+        ],
+        "objects": [
+          [
+            "src/alpha.py",
+            null
+          ]
+        ],
+        "sessions": [
+          "sess-radar-0014",
+          "sess-radar-0015"
+        ],
+        "symbols": []
+      },
+      "id": "threshold_near_miss",
+      "kind": "conflict",
+      "types": [
+        "threshold_adjacent"
+      ],
+      "verdict": "pass"
+    },
+    {
+      "actual": {
+        "counts": {
+          "cells_outside_worktree": 0,
+          "coarse": 0,
+          "disk_changed_paths": 0,
+          "entries": 1,
+          "entries_without_disk_confirmation": 1,
+          "entries_without_session": 0,
+          "exact": 1,
+          "multi_edit_ops": 0,
+          "non_python_entries": 0,
+          "sessions_with_writes": 1,
+          "undetermined": 0,
+          "unknown": 0,
+          "unknown_write_ops": 0,
+          "write_ops": 1
+        },
+        "entries": [
+          [
+            "src/alpha.py",
+            "sess-radar-0020",
+            "exact"
+          ]
+        ],
+        "unknown_entries": 0
+      },
+      "checks": [
+        {
+          "actual": [
+            [
+              "src/alpha.py",
+              "sess-radar-0020",
+              "exact"
+            ]
+          ],
+          "expected": [
+            [
+              "src/alpha.py",
+              "sess-radar-0020",
+              "exact"
+            ]
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "intent.entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.unknown_entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.coarse",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.entries_without_session",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.exact",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.multi_edit_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.non_python_entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.unknown",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.unknown_write_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.write_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "intent.forbidden_paths",
+          "verdict": "pass"
+        }
+      ],
+      "expected": {
+        "counts": {
+          "coarse": 0,
+          "entries": 1,
+          "entries_without_session": 0,
+          "exact": 1,
+          "multi_edit_ops": 0,
+          "non_python_entries": 0,
+          "unknown": 0,
+          "unknown_write_ops": 0,
+          "write_ops": 1
+        },
+        "entries": [
+          [
+            "src/alpha.py",
+            "sess-radar-0020",
+            "exact"
+          ]
+        ],
+        "unknown_entries": 0
+      },
+      "id": "intent_edit_exact",
+      "kind": "intent",
+      "types": [
+        "intent_precision"
+      ],
+      "verdict": "pass"
+    },
+    {
+      "actual": {
+        "counts": {
+          "cells_outside_worktree": 0,
+          "coarse": 1,
+          "disk_changed_paths": 0,
+          "entries": 1,
+          "entries_without_disk_confirmation": 1,
+          "entries_without_session": 0,
+          "exact": 0,
+          "multi_edit_ops": 0,
+          "non_python_entries": 0,
+          "sessions_with_writes": 1,
+          "undetermined": 0,
+          "unknown": 0,
+          "unknown_write_ops": 0,
+          "write_ops": 1
+        },
+        "entries": [
+          [
+            "src/dup.py",
+            "sess-radar-0021",
+            "coarse"
+          ]
+        ],
+        "unknown_entries": 0
+      },
+      "checks": [
+        {
+          "actual": [
+            [
+              "src/dup.py",
+              "sess-radar-0021",
+              "coarse"
+            ]
+          ],
+          "expected": [
+            [
+              "src/dup.py",
+              "sess-radar-0021",
+              "coarse"
+            ]
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "intent.entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.unknown_entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.coarse",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.entries_without_session",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.exact",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.multi_edit_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.non_python_entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.unknown",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.unknown_write_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.write_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "intent.forbidden_paths",
+          "verdict": "pass"
+        }
+      ],
+      "expected": {
+        "counts": {
+          "coarse": 1,
+          "entries": 1,
+          "entries_without_session": 0,
+          "exact": 0,
+          "multi_edit_ops": 0,
+          "non_python_entries": 0,
+          "unknown": 0,
+          "unknown_write_ops": 0,
+          "write_ops": 1
+        },
+        "entries": [
+          [
+            "src/dup.py",
+            "sess-radar-0021",
+            "coarse"
+          ]
+        ],
+        "unknown_entries": 0
+      },
+      "id": "intent_replace_all_coarse",
+      "kind": "intent",
+      "types": [
+        "intent_precision"
+      ],
+      "verdict": "pass"
+    },
+    {
+      "actual": {
+        "counts": {
+          "cells_outside_worktree": 0,
+          "coarse": 1,
+          "disk_changed_paths": 0,
+          "entries": 1,
+          "entries_without_disk_confirmation": 1,
+          "entries_without_session": 0,
+          "exact": 0,
+          "multi_edit_ops": 0,
+          "non_python_entries": 0,
+          "sessions_with_writes": 1,
+          "undetermined": 0,
+          "unknown": 0,
+          "unknown_write_ops": 0,
+          "write_ops": 1
+        },
+        "entries": [
+          [
+            "src/dup.py",
+            "sess-radar-0022",
+            "coarse"
+          ]
+        ],
+        "unknown_entries": 0
+      },
+      "checks": [
+        {
+          "actual": [
+            [
+              "src/dup.py",
+              "sess-radar-0022",
+              "coarse"
+            ]
+          ],
+          "expected": [
+            [
+              "src/dup.py",
+              "sess-radar-0022",
+              "coarse"
+            ]
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "intent.entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.unknown_entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.coarse",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.entries_without_session",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.exact",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.multi_edit_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.non_python_entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.unknown",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.unknown_write_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.write_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "intent.forbidden_paths",
+          "verdict": "pass"
+        }
+      ],
+      "expected": {
+        "counts": {
+          "coarse": 1,
+          "entries": 1,
+          "entries_without_session": 0,
+          "exact": 0,
+          "multi_edit_ops": 0,
+          "non_python_entries": 0,
+          "unknown": 0,
+          "unknown_write_ops": 0,
+          "write_ops": 1
+        },
+        "entries": [
+          [
+            "src/dup.py",
+            "sess-radar-0022",
+            "coarse"
+          ]
+        ],
+        "unknown_entries": 0
+      },
+      "id": "intent_ambiguous_anchor_coarse",
+      "kind": "intent",
+      "types": [
+        "intent_precision"
+      ],
+      "verdict": "pass"
+    },
+    {
+      "actual": {
+        "counts": {
+          "cells_outside_worktree": 0,
+          "coarse": 0,
+          "disk_changed_paths": 0,
+          "entries": 2,
+          "entries_without_disk_confirmation": 1,
+          "entries_without_session": 0,
+          "exact": 1,
+          "multi_edit_ops": 1,
+          "non_python_entries": 0,
+          "sessions_with_writes": 1,
+          "undetermined": 0,
+          "unknown": 1,
+          "unknown_write_ops": 1,
+          "write_ops": 2
+        },
+        "entries": [
+          [
+            "src/alpha.py",
+            "sess-radar-0023",
+            "exact"
+          ]
+        ],
+        "unknown_entries": 1
+      },
+      "checks": [
+        {
+          "actual": [
+            [
+              "src/alpha.py",
+              "sess-radar-0023",
+              "exact"
+            ]
+          ],
+          "expected": [
+            [
+              "src/alpha.py",
+              "sess-radar-0023",
+              "exact"
+            ]
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "intent.entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "intent.unknown_entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": [
+            "multi_edit_unsupported"
+          ],
+          "expected": [
+            "multi_edit_unsupported"
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "intent.unknown_reasons",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.coarse",
+          "verdict": "pass"
+        },
+        {
+          "actual": 2,
+          "expected": 2,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.entries_without_session",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.exact",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.multi_edit_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.non_python_entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.unknown",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.unknown_write_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": 2,
+          "expected": 2,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.write_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "intent.forbidden_paths",
+          "verdict": "pass"
+        }
+      ],
+      "expected": {
+        "counts": {
+          "coarse": 0,
+          "entries": 2,
+          "entries_without_session": 0,
+          "exact": 1,
+          "multi_edit_ops": 1,
+          "non_python_entries": 0,
+          "unknown": 1,
+          "unknown_write_ops": 1,
+          "write_ops": 2
+        },
+        "entries": [
+          [
+            "src/alpha.py",
+            "sess-radar-0023",
+            "exact"
+          ]
+        ],
+        "unknown_entries": 1
+      },
+      "id": "intent_multi_edit_unknown",
+      "kind": "intent",
+      "types": [
+        "intent_precision"
+      ],
+      "verdict": "pass"
+    },
+    {
+      "actual": {
+        "counts": {
+          "cells_outside_worktree": 0,
+          "coarse": 0,
+          "disk_changed_paths": 0,
+          "entries": 1,
+          "entries_without_disk_confirmation": 1,
+          "entries_without_session": 0,
+          "exact": 1,
+          "multi_edit_ops": 0,
+          "non_python_entries": 0,
+          "sessions_with_writes": 1,
+          "undetermined": 0,
+          "unknown": 0,
+          "unknown_write_ops": 0,
+          "write_ops": 1
+        },
+        "entries": [
+          [
+            "src/beta.py",
+            "sess-radar-0024",
+            "exact"
+          ]
+        ],
+        "unknown_entries": 0
+      },
+      "checks": [
+        {
+          "actual": [
+            [
+              "src/beta.py",
+              "sess-radar-0024",
+              "exact"
+            ]
+          ],
+          "expected": [
+            [
+              "src/beta.py",
+              "sess-radar-0024",
+              "exact"
+            ]
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "intent.entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.unknown_entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.coarse",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.entries_without_session",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.exact",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.multi_edit_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.non_python_entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.unknown",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.unknown_write_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.write_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "intent.forbidden_paths",
+          "verdict": "pass"
+        }
+      ],
+      "expected": {
+        "counts": {
+          "coarse": 0,
+          "entries": 1,
+          "entries_without_session": 0,
+          "exact": 1,
+          "multi_edit_ops": 0,
+          "non_python_entries": 0,
+          "unknown": 0,
+          "unknown_write_ops": 0,
+          "write_ops": 1
+        },
+        "entries": [
+          [
+            "src/beta.py",
+            "sess-radar-0024",
+            "exact"
+          ]
+        ],
+        "unknown_entries": 0
+      },
+      "id": "intent_codex_exec_patch",
+      "kind": "intent",
+      "types": [
+        "intent_precision"
+      ],
+      "verdict": "pass"
+    },
+    {
+      "actual": {
+        "counts": {
+          "cells_outside_worktree": 0,
+          "coarse": 0,
+          "disk_changed_paths": 0,
+          "entries": 2,
+          "entries_without_disk_confirmation": 2,
+          "entries_without_session": 0,
+          "exact": 2,
+          "multi_edit_ops": 0,
+          "non_python_entries": 1,
+          "sessions_with_writes": 1,
+          "undetermined": 0,
+          "unknown": 0,
+          "unknown_write_ops": 0,
+          "write_ops": 2
+        },
+        "entries": [
+          [
+            "docs/notes.md",
+            "sess-radar-0025",
+            "exact"
+          ],
+          [
+            "src/alpha.py",
+            "sess-radar-0025",
+            "exact"
+          ]
+        ],
+        "unknown_entries": 0
+      },
+      "checks": [
+        {
+          "actual": [
+            [
+              "docs/notes.md",
+              "sess-radar-0025",
+              "exact"
+            ],
+            [
+              "src/alpha.py",
+              "sess-radar-0025",
+              "exact"
+            ]
+          ],
+          "expected": [
+            [
+              "docs/notes.md",
+              "sess-radar-0025",
+              "exact"
+            ],
+            [
+              "src/alpha.py",
+              "sess-radar-0025",
+              "exact"
+            ]
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "intent.entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.unknown_entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.coarse",
+          "verdict": "pass"
+        },
+        {
+          "actual": 2,
+          "expected": 2,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.entries_without_session",
+          "verdict": "pass"
+        },
+        {
+          "actual": 2,
+          "expected": 2,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.exact",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.multi_edit_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.non_python_entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.unknown",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.unknown_write_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": 2,
+          "expected": 2,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.write_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "intent.forbidden_paths",
+          "verdict": "pass"
+        }
+      ],
+      "expected": {
+        "counts": {
+          "coarse": 0,
+          "entries": 2,
+          "entries_without_session": 0,
+          "exact": 2,
+          "multi_edit_ops": 0,
+          "non_python_entries": 1,
+          "unknown": 0,
+          "unknown_write_ops": 0,
+          "write_ops": 2
+        },
+        "entries": [
+          [
+            "docs/notes.md",
+            "sess-radar-0025",
+            "exact"
+          ],
+          [
+            "src/alpha.py",
+            "sess-radar-0025",
+            "exact"
+          ]
+        ],
+        "unknown_entries": 0
+      },
+      "id": "intent_write_and_non_python",
+      "kind": "intent",
+      "types": [
+        "intent_precision",
+        "non_python_approximate"
+      ],
+      "verdict": "pass"
+    },
+    {
+      "actual": {
+        "counts": {
+          "cells_outside_worktree": 0,
+          "coarse": 0,
+          "disk_changed_paths": 0,
+          "entries": 1,
+          "entries_without_disk_confirmation": 1,
+          "entries_without_session": 0,
+          "exact": 1,
+          "multi_edit_ops": 0,
+          "non_python_entries": 0,
+          "sessions_with_writes": 1,
+          "undetermined": 0,
+          "unknown": 0,
+          "unknown_write_ops": 0,
+          "write_ops": 2
+        },
+        "entries": [
+          [
+            "src/alpha.py",
+            "sess-radar-0027",
+            "exact"
+          ]
+        ],
+        "unknown_entries": 0
+      },
+      "checks": [
+        {
+          "actual": [
+            [
+              "src/alpha.py",
+              "sess-radar-0027",
+              "exact"
+            ]
+          ],
+          "expected": [
+            [
+              "src/alpha.py",
+              "sess-radar-0027",
+              "exact"
+            ]
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "intent.entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.unknown_entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.coarse",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.entries_without_session",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.exact",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.multi_edit_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.non_python_entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.unknown",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.unknown_write_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": 2,
+          "expected": 2,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.write_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "intent.forbidden_paths",
+          "verdict": "pass"
+        }
+      ],
+      "expected": {
+        "counts": {
+          "coarse": 0,
+          "entries": 1,
+          "entries_without_session": 0,
+          "exact": 1,
+          "multi_edit_ops": 0,
+          "non_python_entries": 0,
+          "unknown": 0,
+          "unknown_write_ops": 0,
+          "write_ops": 2
+        },
+        "entries": [
+          [
+            "src/alpha.py",
+            "sess-radar-0027",
+            "exact"
+          ]
+        ],
+        "unknown_entries": 0
+      },
+      "id": "intent_multi_write_merge",
+      "kind": "intent",
+      "types": [
+        "intent_precision"
+      ],
+      "verdict": "pass"
+    },
+    {
+      "actual": {
+        "counts": {
+          "cells_outside_worktree": 0,
+          "coarse": 0,
+          "disk_changed_paths": 2,
+          "entries": 2,
+          "entries_without_disk_confirmation": 0,
+          "entries_without_session": 1,
+          "exact": 2,
+          "multi_edit_ops": 0,
+          "non_python_entries": 0,
+          "sessions_with_writes": 1,
+          "undetermined": 0,
+          "unknown": 0,
+          "unknown_write_ops": 0,
+          "write_ops": 1
+        },
+        "entries": [
+          [
+            "src/alpha.py",
+            "sess-radar-0026",
+            "exact"
+          ],
+          [
+            "src/beta.py",
+            "",
+            "exact"
+          ]
+        ],
+        "unknown_entries": 0
+      },
+      "checks": [
+        {
+          "actual": [
+            [
+              "src/alpha.py",
+              "sess-radar-0026",
+              "exact"
+            ],
+            [
+              "src/beta.py",
+              "",
+              "exact"
+            ]
+          ],
+          "expected": [
+            [
+              "src/alpha.py",
+              "sess-radar-0026",
+              "exact"
+            ],
+            [
+              "src/beta.py",
+              "",
+              "exact"
+            ]
+          ],
+          "extra": [],
+          "missing": [],
+          "name": "intent.entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.unknown_entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.coarse",
+          "verdict": "pass"
+        },
+        {
+          "actual": 2,
+          "expected": 2,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.entries_without_session",
+          "verdict": "pass"
+        },
+        {
+          "actual": 2,
+          "expected": 2,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.exact",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.multi_edit_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.non_python_entries",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.unknown",
+          "verdict": "pass"
+        },
+        {
+          "actual": 0,
+          "expected": 0,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.unknown_write_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": 1,
+          "expected": 1,
+          "extra": [],
+          "missing": [],
+          "name": "intent.counts.write_ops",
+          "verdict": "pass"
+        },
+        {
+          "actual": [],
+          "expected": [],
+          "extra": [],
+          "missing": [],
+          "name": "intent.forbidden_paths",
+          "verdict": "pass"
+        }
+      ],
+      "expected": {
+        "counts": {
+          "coarse": 0,
+          "entries": 2,
+          "entries_without_session": 1,
+          "exact": 2,
+          "multi_edit_ops": 0,
+          "non_python_entries": 0,
+          "unknown": 0,
+          "unknown_write_ops": 0,
+          "write_ops": 1
+        },
+        "entries": [
+          [
+            "src/alpha.py",
+            "sess-radar-0026",
+            "exact"
+          ],
+          [
+            "src/beta.py",
+            "",
+            "exact"
+          ]
+        ],
+        "unknown_entries": 0
+      },
+      "id": "intent_disk_wins",
+      "kind": "intent",
+      "types": [
+        "intent_precision"
+      ],
+      "verdict": "pass"
+    }
+  ],
+  "summary": {
+    "all_passed": true,
+    "checks": 174,
+    "checks_failed": 0,
+    "coverage_ok": true,
+    "failed": 0,
+    "passed": 15,
+    "scenarios": 15
+  }
+}

@@ -1,7 +1,7 @@
-"""退出码契约（K1）+ 阶段守卫（K15）。
+"""退出码契约（K1）+ 命令表守卫（K15）。
 
 这组断言是**骨架期最有价值的资产**：题面 §M4 把 `0/1/2/3` 四语义写成硬要求，
-而"未交付命令必须显式拦截（不伪造空结果）"是本题判定类工具的正确性底线。
+M5 起命令面 7/7 全部交付，第五个码 `4 = 阶段未就绪` 已整条退役（K1 四步）。
 """
 
 import shutil
@@ -15,8 +15,8 @@ from agent_conflict_radar.cli import main
 from agent_conflict_radar.exit_codes import (
     ALL_EXIT_CODES,
     EXIT_CODE_LABELS,
+    EXIT_CONFLICTS_FOUND,
     EXIT_ENVIRONMENT,
-    EXIT_NOT_READY,
     EXIT_OK,
     EXIT_USAGE,
 )
@@ -28,10 +28,42 @@ from agent_conflict_radar.exit_codes import (
 
 
 def test_exit_code_set_is_frozen_and_labelled():
-    assert ALL_EXIT_CODES == (0, 1, 2, 3, 4)
+    """M5 起只有四语义：`4` 已随 `bench` 交付整条退役。"""
+    assert ALL_EXIT_CODES == (0, 1, 2, 3)
     assert len(set(ALL_EXIT_CODES)) == len(ALL_EXIT_CODES)
     for code in ALL_EXIT_CODES:
         assert code in EXIT_CODE_LABELS
+
+
+def test_exit_not_ready_constant_is_gone_and_stays_gone():
+    """K1 退役纪律的**防复活**判据：常量不得回潮。
+
+    为什么要有这一条：删掉一个常量很容易，难的是下一次有人"顺手加回来"。
+    这条断言让复活当场变红——而不是等它悄悄长成第二个不被消费的码。
+    """
+    import agent_conflict_radar.exit_codes as exit_codes
+
+    assert not hasattr(exit_codes, "EXIT_NOT_READY"), (
+        "`EXIT_NOT_READY` 已随 M5 退役（K1 四步）。若确有新的第五语义，"
+        "必须五处同步（代码 → 测试 → README → K 表 → 决策记录），而不是只加一个常量"
+    )
+    # `4` 不得以任何形式回到冻结集合里。
+    assert 4 not in exit_codes.ALL_EXIT_CODES
+
+
+def test_errors_module_has_no_stage_not_ready_class():
+    """错误类型侧的防复活：`StageNotReady` 已整条退役，也不许留空壳。"""
+    from agent_conflict_radar import errors
+
+    assert not hasattr(errors, "StageNotReady")
+
+
+def test_stage_tables_have_no_not_ready_bucket():
+    """`STAGE_NOT_READY` / `milestone_for` 不得回潮：它们代表的"未交付"状态已不存在。"""
+    assert not hasattr(stages, "STAGE_NOT_READY"), (
+        "命令面 7/7 已全部交付；重新引入「未就绪」表意味着又有一条命令不产出真实结果"
+    )
+    assert not hasattr(stages, "milestone_for")
 
 
 # --------------------------------------------------------------------------------------
@@ -130,49 +162,29 @@ def test_broken_config_is_environment_error(run_cli, make_config):
 
 
 # --------------------------------------------------------------------------------------
-# 4：阶段未就绪（骨架期专用）
+# K15 退役纪律（反幽灵）
 # --------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("command", sorted(stages.STAGE_NOT_READY))
-def test_staged_commands_return_not_ready(run_cli, command, tmp_path):
-    argv = [command]
-    if "--repo" in _flags_of(command):
-        argv += ["--repo", str(tmp_path)]
-    code, out, err = run_cli(argv)
-    assert code == EXIT_NOT_READY, "命令 %r 应显式拦截（exit 4）" % command
-    assert "尚未交付" in err
-    assert "不会返回空结果" in err, "拦截消息必须写清'不伪造空结果'，否则读者会以为只是没输出"
-    assert out == "", "阶段未就绪不得向 stdout 吐出任何（会被当成结果的）产物"
-    assert stages.STAGE_NOT_READY[command] in err, "消息里应带出计划里程碑"
+def test_delivered_commands_are_not_staged_anymore():
+    """已交付命令不得残留"未交付"痕迹。
 
-
-def _flags_of(command):
+    M4 起这条判据是"逐条断言已交付命令不在 `STAGE_NOT_READY` 里"；M5 起那张表整条退役，
+    判据升级为**"表本身不存在"**（见上面的 `test_stage_tables_have_no_not_ready_bucket`）。
+    这里保留"每条命令都真的被注册"这一半，防止有人删表时顺手把命令也删了。
+    """
     import argparse
 
     from agent_conflict_radar.cli import build_parser
 
     parser = build_parser()
+    registered = set()
     for action in parser._actions:  # noqa: SLF001
         if isinstance(action, argparse._SubParsersAction):  # noqa: SLF001
-            sub = action.choices.get(command)
-            if sub is None:
-                return set()
-            flags = set()
-            for sub_action in sub._actions:  # noqa: SLF001
-                flags.update(sub_action.option_strings)
-            return flags
-    return set()
-
-
-def test_delivered_commands_are_not_staged_anymore():
-    """K1 退役纪律：**每一条**已交付命令都不得残留在阶段未就绪表里（幽灵语义）。
-
-    判据写成"对 DELIVERED_COMMANDS 逐条断言"，而不是挑几个命令名硬编码：
-    下一棒把 `intent` 挪过来时，这条断言自动覆盖它，不需要有人记得回来加一行。
-    """
+            registered = set(action.choices)
+    assert registered == set(stages.all_commands())
     for command in stages.DELIVERED_COMMANDS:
-        assert command not in stages.STAGE_NOT_READY, "%r 已交付却仍留在阶段未就绪表里" % command
+        assert command in registered, "%r 在已交付表里但 parser 没有注册" % command
 
 
 # --------------------------------------------------------------------------------------
@@ -207,20 +219,20 @@ def test_selftest_detects_broken_serialize_contract(run_cli, monkeypatch):
     assert "序列化契约" in err
 
 
-def test_selftest_detects_stage_table_overlap(run_cli, monkeypatch):
-    """阶段表自相矛盾（同一命令既已交付又未就绪）→ 自检必须变红。"""
+def test_selftest_detects_command_table_drift(run_cli, monkeypatch):
+    """命令表与 parser 注册面不一致 → 自检必须变红。
+
+    本用例在 M2/M3/M4 是"阶段表自相矛盾"，M5 起判据换成"命令表漂移"——
+    因为"未交付"这个状态已经不存在，能制造的真实矛盾只剩"注册了却没登记"这一种。
+    """
     from agent_conflict_radar import cli
 
-    # 从**当前仍在** STAGE_NOT_READY 里的命令挑一个来制造重叠——不要硬编码命令名：
-    # 每棒交付一条命令都会让硬编码的名字失效（M2 交付 `intent` 时本用例当场变红，正是这个原因）。
-    still_staged = sorted(stages.STAGE_NOT_READY)
-    assert still_staged, "阶段未就绪表已空：本用例没有可用样本（里程碑全交付后应整条退役）"
     monkeypatch.setattr(
-        cli.stages, "DELIVERED_COMMANDS", tuple(stages.DELIVERED_COMMANDS) + (still_staged[0],)
+        cli.stages, "DELIVERED_COMMANDS", tuple(stages.DELIVERED_COMMANDS) + ("ghost-command",)
     )
     code, _out, err = run_cli(["selftest"])
     assert code == 1
-    assert "阶段表" in err
+    assert "命令表" in err
 
 
 # --------------------------------------------------------------------------------------
@@ -256,6 +268,23 @@ def test_console_script_runs_scan_for_real(repo_root, tmp_path):
     )
     assert completed.returncode == EXIT_ENVIRONMENT
     assert "git" in completed.stdout.decode("utf-8", errors="replace")
+
+
+def test_bench_exit_code_is_not_conflict_semantics(tmp_path, repo_root):
+    """`bench` 的 1 与 `detect` 的 1 是**两种语义**：前者"基准未达标"，后者"检出冲突"。
+
+    这条守的是 README 的措辞：把评分失败读成仓库有冲突，会让用户去改自己的代码。
+    """
+    from agent_conflict_radar import cli as cli_module
+    from agent_conflict_radar import config as config_module
+    from agent_conflict_radar.bench import score
+
+    cfg = config_module.load(str(repo_root / "config" / "radar.toml"))
+    result = score.run_bench(bench_dir=str(repo_root / "bench"), only=["negative_no_overlap"], cfg=cfg)
+    text = score.render_summary(result)
+    assert "不是“检出冲突”" in text or "不是" in text
+    # 退出码常量本身仍是 1（K1 的四语义不动），但语义标注必须出现在人读输出里。
+    assert EXIT_CONFLICTS_FOUND == 1
 
 
 def test_main_never_raises_systemexit(run_cli):

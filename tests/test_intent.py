@@ -477,8 +477,9 @@ def test_overlong_session_line_is_reported_as_undetermined(tmp_path):
 
 
 def test_intent_is_not_staged_anymore():
+    """K15 退役纪律：`intent` 在交付表里，且"未就绪"这张表已整条退役（M5，K1 四步）。"""
     assert "intent" in stages.DELIVERED_COMMANDS
-    assert "intent" not in stages.STAGE_NOT_READY
+    assert not hasattr(stages, "STAGE_NOT_READY"), "命令面 7/7 已全部交付：不应再有未就绪表"
 
 
 def test_intent_help_mentions_no_milestone_gate(tmp_path):

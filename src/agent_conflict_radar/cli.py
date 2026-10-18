@@ -1,4 +1,4 @@
-"""命令行入口：参数解析 → 环境校验 → 阶段守卫 → 分派。
+"""命令行入口：参数解析 → 环境校验 → 分派。
 
 退出码语义（K1）见 `exit_codes.py`。分派顺序是固定契约，冒烟测试按它断言：
 
@@ -6,11 +6,10 @@
     2. 加载配置            → 缺失/不可解析给 3
     3. 目标路径存在性      → 不存在给 2
     4. git 可用性          → 不可用给 3
-    5. 阶段守卫            → 未交付的命令给 4
-    6. 执行命令
+    5. 执行命令
 
-顺序是有意的：**能判定的环境问题先判**，最后才是"尚未实现"。这样骨架期的 exit 4 不会
-掩盖"配置坏了""git 没装"这类用户需要立刻知道的事。
+顺序是有意的：**能判定的环境问题先判**，这样"配置坏了""git 没装"这类用户需要立刻知道的事
+不会被别的错误掩盖。
 
 编码守卫（K8）：入口第一件事就是 `_ensure_utf8_stdio()`。`py -X utf8` 只是本机习惯，
 **不是全局免疫力**——用户直接敲 `radar` 时没有这个开关，CI 管道可能是 cp1252。
@@ -30,12 +29,12 @@ from . import intent as intent_module
 from . import report as report_module
 from . import serialize
 from . import stages
+from .bench import score as bench_module
 from .errors import ConfigError, RadarError, UsageError
 from .exit_codes import (
     EXIT_CODE_LABELS,
     EXIT_CONFLICTS_FOUND,
     EXIT_ENVIRONMENT,
-    EXIT_NOT_READY,
     EXIT_OK,
     EXIT_USAGE,
 )
@@ -104,7 +103,7 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "退出码：0 无冲突 / 1 有冲突 / 2 用法错误 / 3 依赖或环境缺失 / 4 阶段未就绪（骨架期）\n"
+            "退出码：0 无冲突 / 1 有冲突 / 2 用法错误 / 3 依赖或环境缺失\n"
             "数值口径唯一权威：config/radar.toml（用 `radar config` 查看生效值）"
         ),
     )
@@ -150,7 +149,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     bench = subparsers.add_parser("bench", help="M5：合成冲突矩阵 + 真值对账")
     bench.add_argument("--bench-dir", metavar="PATH", default=None, help="合成矩阵目录（默认：仓库根下 bench/）")
-    bench.add_argument("--out-dir", metavar="PATH", default=None, help="对账结果输出目录")
+    bench.add_argument("--out-dir", metavar="PATH", default=None, help="对账结果输出目录（落 last_run.json）")
     bench.add_argument("--only", metavar="ID[,ID...]", default=None, help="只跑指定场景（逗号分隔）")
 
     subparsers.add_parser("config", help="打印生效配置（可核验「数值从哪来」）")
@@ -197,16 +196,7 @@ def _dispatch(args) -> int:
         gitio.ensure_git_available()
         setattr(args, "repo_resolved", repo)
 
-    # 5) 阶段守卫 → 4（显式拦截，不伪造空结果）
-    milestone = stages.milestone_for(command)
-    if milestone is not None:
-        return _fail(
-            "命令 %r 尚未交付：计划在 %s 落地。骨架期显式拦截——不会返回空结果冒充"
-            "「没有冲突」。进度见 plan/06-里程碑.md。" % (command, milestone),
-            EXIT_NOT_READY,
-        )
-
-    # 6) 执行
+    # 5) 执行
     if command == "config":
         return _cmd_config(cfg)
     if command == "selftest":
@@ -219,6 +209,8 @@ def _dispatch(args) -> int:
         return _cmd_detect(cfg, args)
     if command == "report":
         return _cmd_report(cfg, args)
+    if command == "bench":
+        return _cmd_bench(cfg, args)
     raise UsageError("未知命令：%r" % command)  # pragma: no cover - 由 parser 兜住
 
 
@@ -329,6 +321,39 @@ def _cmd_report(cfg, args) -> int:
     return EXIT_CONFLICTS_FOUND if result.conflicts else EXIT_OK
 
 
+def _cmd_bench(cfg, args) -> int:
+    """`radar bench`：把冻结矩阵逐场景物化 → scan/intent/detect → 与真值集合精确匹配。
+
+    退出码语义（与 README 一致）：**全部场景通过 → 0；任一场景失败 → 1**。
+    这里的 `1` 不是"检出冲突"，而是"基准未达标"——两种 1 的语义在输出文本里写明，
+    避免把"评分失败"读成"仓库有冲突"。用法错误（`--only` 未知 id / 过滤后为空）→ 2；
+    矩阵目录缺失 / 场景物化时 git 不可用 → 3。
+
+    `--out-dir` 给了就落 `last_run.json`（经 `serialize.write_atomic`，K2）；不给时落
+    **矩阵目录**（`<bench-dir>/last_run.json`，`plan/05` §二 的布局）——这是唯一一条默认写盘的命令：
+    "最近一次评分结果"本身就是交付物（DoD 点名的实物），不落盘就无法被复核。
+    """
+    bench_dir = getattr(args, "bench_dir", None)
+    only_raw = getattr(args, "only", None)
+    only = None if only_raw is None else only_raw.split(",")
+    out_dir = getattr(args, "out_dir", None)
+    target_dir = _resolve_out_dir(out_dir) if out_dir else None
+    result = bench_module.run_bench(
+        bench_dir=bench_dir,
+        out_dir=None,  # 由这里统一落盘，复用 CLI 的 --out-dir 解析（不存在就建，存在但不是目录 → 2）
+        only=only,
+        cfg=cfg,
+    )
+    text = bench_module.render_summary(result)
+    if target_dir is not None:
+        bench_module.write_last_run(str(target_dir), result)
+    else:
+        # 默认落**本轮解析出的**矩阵目录（`--bench-dir` 或仓库根 bench/），不另算一遍路径规则。
+        bench_module.write_last_run(result.bench_dir, result)
+    sys.stdout.write(text)
+    return EXIT_OK if result.all_passed() else EXIT_CONFLICTS_FOUND
+
+
 def _resolve_out_dir(raw: str):
     """把 `--out-dir` 解析成可写目录：不存在就建；存在但不是目录 → 用法错误（exit 2）。"""
     from .paths import normalize_path
@@ -354,6 +379,15 @@ def _cmd_config(cfg) -> int:
     }
     sys.stdout.write(serialize.dumps_json(payload))
     return EXIT_OK
+
+
+def _registered_commands() -> List[str]:
+    """反射 parser 的子命令注册面（自检用；`build_parser` 只建一次，不留全局状态）。"""
+    parser = build_parser()
+    for action in parser._actions:  # noqa: SLF001 - argparse 没有公开的枚举接口
+        if isinstance(action, argparse._SubParsersAction):  # noqa: SLF001
+            return sorted(action.choices)
+    return []
 
 
 def _selftest_checks(cfg) -> List[str]:
@@ -383,10 +417,17 @@ def _selftest_checks(cfg) -> List[str]:
     if serialize.dumps_json(probe) != expected:
         failures.append("序列化契约不满足（K2）：期望 %r" % expected)
 
-    # 检查 4：阶段表自洽（已交付与未交付不得重叠）
-    overlap = set(stages.DELIVERED_COMMANDS) & set(stages.STAGE_NOT_READY)
-    if overlap:
-        failures.append("阶段表自相矛盾：%s 同时出现在已交付与未交付集合" % sorted(overlap))
+    # 检查 4：命令表自洽（parser 注册面 == 已交付表；M5 起没有"未交付"这第三种状态）
+    try:
+        registered = set(_registered_commands())
+        declared = set(stages.DELIVERED_COMMANDS)
+        if registered != declared:
+            failures.append(
+                "命令表与 parser 注册面不一致：parser 多出 %s / 已交付表多出 %s"
+                % (sorted(registered - declared), sorted(declared - registered))
+            )
+    except RadarError as exc:
+        failures.append("命令表不可校验：%s" % exc)
 
     # 检查 5：包版本可得
     if not __version__:

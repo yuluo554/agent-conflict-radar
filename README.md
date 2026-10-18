@@ -6,9 +6,9 @@
 
 ---
 
-## ⚠️ 当前状态：M4 已交付（2026-10-18）
+## ✅ 当前状态：M5 已交付（2026-10-18），命令面 7/7
 
-**这不是一个完成品。** 骨架可安装，`scan` / `intent` / `detect` / `report` 已交付，合成冲突矩阵与意图矩阵已入仓可审计；但**基准评分（`radar bench`）尚未落地**：
+七条命令全部落地，合成冲突矩阵与意图矩阵已入仓可审计，`radar bench` 可**一键复跑评分**：
 
 | 命令 | 状态 | 计划里程碑 |
 |---|---|---|
@@ -16,11 +16,16 @@
 | `radar intent` | ✅ 已交付 | M2 |
 | `radar detect` | ✅ 已交付 | M3 |
 | `radar report` | ✅ 已交付 | M4 |
+| `radar bench` | ✅ 已交付 | M5 |
 | `radar config` | ✅ 已交付 | M0 |
 | `radar selftest` | ✅ 已交付 | M0 |
-| `radar bench` | ⬜ 未交付（exit 4） | M5 |
 
-未交付的命令**显式报错并退出码 4**，**不会**返回空结果冒充"没有冲突"——把"没检查过"读成"没问题"，对判定类工具是最严重的失真。
+M5 起**没有"阶段未就绪"这第五条退出码**：`4` 随最后一条命令交付整条退役（K1 四步），
+命令面只剩题面锁定的 `0/1/2/3` 四语义。
+
+**`radar bench` 的退出码语义**：**全部场景通过 → 0；任一场景失败 → 1**。这里的 `1` 是
+"**基准未达标**"，与 `detect` / `report` 的"检出冲突"**不是同一件事**——不要因为评分失败去改仓库代码。
+`--only` 未知 id 或过滤后为空 → 2；矩阵目录缺失 / 缺 git → 3。
 
 **`radar scan` 的退出码语义**：成功**恒为 0**；`undetermined`（未识别的会话形态、无消息行的文件等）只作为提示出现在产物里，**不改退出码**——它是"我们没看懂"，不是"有冲突"。真正的环境问题（`--repo` 不在 git 仓库内、显式指定的会话根不存在）才给 exit 3，且不吐任何产物。
 
@@ -56,13 +61,16 @@ python -m agent_conflict_radar --version
 python -m pytest -q
 ```
 
-### 合成场景演示（M5 交付后）
+### 合成场景演示（`bench` 评分）
 
 ```bash
-radar bench                                   # 跑合成冲突矩阵并对账真值
-radar bench --only same_symbol_diff_lines      # 只跑指定场景
-radar bench --bench-dir bench --out-dir out    # 显式指定矩阵目录与产物目录
+radar bench                                   # 跑整棵矩阵（冲突 7 条 + 意图 8 条）并对账真值
+radar bench --only same_symbol_diff_lines     # 只跑指定场景（逗号分隔可多条）
+radar bench --bench-dir bench --out-dir out   # 显式指定矩阵目录与产物目录
 ```
+
+输出：逐场景 `期望 / 实际 / 判定` 三列 + 覆盖度门槛复核 + 汇总；`last_run.json` 默认落在
+矩阵目录（给 `--out-dir` 则落那里），走冻结序列化契约（K2），**不含本机路径**（K17）。
 
 ### 真实数据的只读演示（`scan` / `intent` / `detect` / `report` 已交付）
 
@@ -172,7 +180,9 @@ radar report --repo . --format md            # 只打人读 Markdown
 * **阈值不在真值里复制**：涉及阈值处一律写成指向 `config` 的符号引用；`--check` 会**现场读 config 求值**——改了阈值而真值不动，当场变红。
 * **`.git` 不入冻结产物**：`.git` 内部字节随 zlib/git 版本漂，跨平台不可能逐字节重现。提交的可复现性改用更强的判据——`--check` 重新物化合成仓库并**复算提交 sha**（sha 只由内容与固定元数据决定）。
 
-矩阵生成器在包内（`python -m agent_conflict_radar.bench.gen`；`--out bench` 重建 / `--check` 两层自检 / `--materialize <id> --dest <dir>` 物化冲突场景 / `--materialize-intent <id> --dest <dir>` 物化意图场景）。CI 每次都会跑 `--check`。**注意**：`radar bench`（拿矩阵给引擎**评分**）属于 M5，尚未交付——现在能跑的是"矩阵本身可重建"。
+矩阵生成器在包内（`python -m agent_conflict_radar.bench.gen`；`--out bench` 重建 / `--check` 两层自检 / `--materialize <id> --dest <dir>` 物化冲突场景 / `--materialize-intent <id> --dest <dir>` 物化意图场景）。CI 每次都会跑 `--check`。
+
+`radar bench` 是**消费侧**：它把矩阵逐场景物化成真 git 仓库 + 真会话日志，跑 `scan → intent → detect` 完整链路，再与真值做**集合精确匹配**——多报（extra）、漏报（missing）都计失败。评分的实现在包内 `agent_conflict_radar/bench/score.py`（不与 `bench/` 数据目录同名，否则会被包遮蔽）。
 
 > 合成数据白名单（K11）：假项目名 `demo-radar-alpha`、假 session id `sess-radar-NNNN`、假用户名 `radar-user`、固定基准时间 `2026-01-01T00:00:00Z` 起的确定偏移。真实日志、真实路径、真实 session id **一律不入仓**（`tools`/`tests` 有零命中断言）。
 
@@ -186,11 +196,14 @@ radar report --repo . --format md            # 只打人读 Markdown
 | `1` | 有冲突 |
 | `2` | 用法错误（未知子命令 / 缺必填参数 / 未知 `--format` / 路径不存在） |
 | `3` | 依赖或环境缺失（git 不可用 / 配置缺失或不可解析 / 会话源不存在 / `--repo` 不在 git 仓库内） |
-| `4` | 阶段未就绪（**骨架期专用**，随模块落地逐项退役；`scan` M1 / `intent` M2 / `detect` M3 / `report` M4 已退役，仅 `bench` 待 M5 退役） |
 
 > 退出码非 0 **不一定**是跑挂：`detect` / `report` 对存在冲突的仓库返回 `1` 是**既定语义**，不是故障；
 > `scan` / `intent` 采到 `undetermined` / `coarse` / `unknown` 仍是 `0`；`detect` / `report` 采到
 > `undetermined` / `degraded` / `approximate` 也**不改**退出码——只在产物里逐条列出（见上文"当前状态"）。
+> `bench` 的 `1` 是"**基准未达标**"（某条场景与真值不符），不是"检出冲突"。
+>
+> 骨架期曾有 `4 = 阶段未就绪`，M5 交付最后一条命令后整条退役（`exit_codes.py` 只剩四语义，
+> 并有 `not hasattr` 防复活断言）。
 
 ---
 
@@ -220,7 +233,7 @@ radar report --repo . --format md            # 只打人读 Markdown
 | `radar intent` | 变更意图提取（写操作 + 未提交 diff） | M2 |
 | `radar detect` | 三级冲突检测（文件 / 区块 / 符号） | M3 |
 | `radar report` | 预警报告（Markdown + JSON 双输出） | M4 |
-| `radar bench` | 合成冲突矩阵 + 植入真值对账 | M5 |
+| `radar bench` | 合成矩阵评分 + 植入真值对账（逐场景 期望/实际/判定） | M5 |
 | `radar config` | 打印生效配置 | M0 |
 | `radar selftest` | 自检 | M0 |
 全局选项写在子命令**之前**：`radar --config path config`。
@@ -251,7 +264,7 @@ radar report --repo . --format md            # 只打人读 Markdown
 ## 已知环境问题
 
 * **配置文件解析用自写受限 TOML 子集解析器**（项目底线 Python 3.8 没有 `tomllib`）。支持：注释、`[section]`、`key = 整数/浮点/布尔/带引号字符串/标量数组`。**不支持**：表数组 `[[...]]`、内联表 `{...}`、多行字符串、点号键——遇到即在**报错信息里点名行号**（不静默跳过）。
-* **`radar bench` 默认在仓库根的 `bench/` 找合成矩阵**；源码包/解包后目录不同时请显式传 `--bench-dir`。
+* **`radar bench` 默认在仓库根的 `bench/` 找合成矩阵**；源码包/解包后目录不同时请显式传 `--bench-dir`。默认把 `last_run.json` 落回**矩阵目录**（给 `--out-dir` 则落那里）。
 * **Windows 路径**：一律用参数传路径，不要依赖 shell 的 `~` 展开（Git Bash 的 `~` 与 Windows Python 不互通）；`~` 解不出主目录时本工具**显式报错**，不会在当前位置创建名为 `~` 的目录。
 * **`radar` 与 `python -m agent_conflict_radar` 是两条通路**（`sys.path` 来源不同）：前者要求已安装，后者在源码态配 `PYTHONPATH=src` 也可跑。CI 对两条都冒烟。
 
@@ -285,6 +298,7 @@ CI：`.github/workflows/ci.yml`，四矩阵 `windows/ubuntu × Python 3.8/3.12`�
 | [`plan/05-数据计划.md`](plan/05-数据计划.md) | 合成矩阵格式、植入真值语义、覆盖度门槛 |
 | [`plan/06-里程碑.md`](plan/06-里程碑.md) | M1–M6 目标 / 任务 / DoD / 降级策略 |
 | [`plan/07-交付对标与决策记录.md`](plan/07-交付对标与决策记录.md) | 材料与评分对标、决策记录、既定口径 K 清单 |
+| [`docs/技术报告.md`](docs/技术报告.md) | 技术报告：归集口径 / 试合并边界 / AST 符号方法 / 严重度 / 隐私 / 基准可复现性 |
 | [`data/README.md`](data/README.md) | 依据查证（HN 原话 + 检索式）、本机实测、合成数据纪律 |
 
 ---

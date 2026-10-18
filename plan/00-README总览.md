@@ -25,7 +25,9 @@
 | [HANDOFF-M2.md](HANDOFF-M2.md) | 上一棒交接（M1→M2）：进度+证据 / 待办 / K 口径 / 环境坑 / DoD / 命令速查 | ✅ 已落盘 2026-10-17（M2 已按它完成，留作过程留档） |
 | [HANDOFF-M3.md](HANDOFF-M3.md) | 上一棒交接（M2→M3）：进度+证据 / 待办 / K 口径 / 环境坑 / DoD / 命令速查 | ✅ 已落盘 2026-10-18（M3 已按它完成，留作过程留档） |
 | [HANDOFF-M4.md](HANDOFF-M4.md) | 上一棒交接（M3→M4）：进度+证据 / 待办 / K 口径 / 环境坑 / DoD / 命令速查 | ✅ 已落盘 2026-10-18（M4 已按它完成，留作过程留档） |
-| [HANDOFF-M5.md](HANDOFF-M5.md) | 下一棒交接（M4→M5）：进度+证据 / 待办 / K 口径 / 环境坑 / DoD / 命令速查 | ✅ M4 收尾时落盘 2026-10-18 |
+| [HANDOFF-M5.md](HANDOFF-M5.md) | 上一棒交接（M4→M5）：进度+证据 / 待办 / K 口径 / 环境坑 / DoD / 命令速查 | ✅ 已落盘 2026-10-18（M5 已按它完成，留作过程留档） |
+| [HANDOFF-M6.md](HANDOFF-M6.md) | 下一棒交接（M5→M6）：进度+证据 / 待办 / K 口径 / 环境坑 / DoD / 命令速查 | ✅ M5 收尾时落盘 2026-10-18 |
+| [../docs/技术报告.md](../docs/技术报告.md) | 技术报告（归集口径 / 试合并边界 / AST 方法 / 严重度口径 / 隐私设计 / 基准可复现性） | ✅ M5 落盘 2026-10-18（M6 定稿） |
 
 > 里程碑收尾纪律沿用系列惯例：**DoD 达成后必须在本对话内写完下一棒的 `HANDOFF-M<next>.md` 才允许结束**。
 
@@ -68,8 +70,8 @@
 | M2 变更意图提取（Edit/Write/apply_patch + git status/diff） | 会话内 `file_path` / `old_string` / `new_string` / `apply_patch` 文本；`git status --porcelain` + `git diff` + `git diff --cached`；`git show HEAD:<path>` 作定位基线 | 随包 | 合成会话解析对账（八条意图场景逐条一致）；无法定位时 `coarse`/`unknown` 而非猜测；同输入同输出 | ✅ **M2 完成**（2026-10-18）：`radar intent` 交付（K15 四步走完）；双解释器 248 passed / 1 skipped；冒烟 27 用例；变异 22 组全检出；R4 闭环 |
 | M3 三级检测（文件 / 区块 / 符号） | `git merge-tree --write-tree` ✅；Python `ast` ✅ | 随包；git 为运行期必需（缺失 exit 3） | 合成冲突矩阵检出集合精确匹配；负样本零误报；只读断言（工作区 hash 前后一致） | ✅ **M3 完成**（2026-10-18）：`radar detect` 交付（K15 四步走完，**退出码 1 首次真正上岗**）；七条冻结场景的检出集合逐条精确匹配 + 三态各有合成用例；双解释器 299 passed / 1 skipped；冒烟 29 用例；变异 29 组全检出 |
 | M4 预警报告（Markdown + JSON + 可选通知） | M3 冲突清单 | 随包 | 报告排序稳定；退出码四语义测试；通知不可用时 `notify_unavailable` 不影响主流程 | ✅ **M4 完成**（2026-10-18）：`radar report` 交付（K15 四步走完）；单一渲染源（Markdown = JSON payload 的纯函数）+ 渲染三律（零判定 AST 门禁 / 零外链常驻出口 / 双跑逐字节）+ 退出码 0/1/2/3 各有实物；双解释器 336 passed / 1 skipped；冒烟 35 用例；变异 33 组全检出 |
-| M5 合成冲突矩阵 + 植入真值 | 程序化构造场景（同文件异函数 / 同函数异行 / 整文件覆盖 / subagent 派生 / 负样本） | 随包零外部依赖 | 生成器同步标注真值；一条命令复现；覆盖度口径写 manifest | 🔶 **M1 已交付矩阵本体**（7 条场景 + 真值 + 台账 + 两层 `--check`）；`radar bench` 评分与矩阵补全待 M5 |
-| 隐私设计（纯本地零上传） | 无网络依赖 | 全链路本地 | 依赖扫描 + 断网运行 + 入库内容扫描（真实路径 / session id 零命中） | ⬜ 待 M5 |
+| M5 合成冲突矩阵 + 植入真值 + **一条命令评分** | 程序化构造场景（同文件异函数 / 同函数异行 / 整文件覆盖 / subagent 派生 / 负样本 / 阈值成对）+ 意图矩阵八条 | 随包零外部依赖 | 生成器同步标注真值；`radar bench` 逐场景物化 → 跑链路 → 集合精确匹配；覆盖度口径写 manifest 并在消费侧复核 | ✅ **M5 完成**（2026-10-18）：`radar bench` 交付（K15 四步 + K1 退役 exit 4）；整矩阵 **15/15 场景、174 项检查 0 失败**；`bench/last_run.json` 落盘（K2 + K17）；双解释器 364 passed / 1 skipped；冒烟 38 用例；变异 36 组全检出 |
+| 隐私设计（纯本地零上传） | 无网络依赖 | 全链路本地 | 依赖扫描 + 断网运行 + 入库内容扫描（真实路径 / session id 零命中） | ✅ **M5 复核通过**（2026-10-18）：零网络导入面审计通过；`bench/`、`docs/`、`plan/`、README 扫描无真实盘符路径 / `/Users/` / `/home/` / Real-UUID / 真实用户名；`last_run.json` 机器无关 |
 | 发布闭环（tag + Release 附产物 + 留档） | GitHub 公开仓库 | Release 附源码 zip + sha256 留档 | 仓库内耐久副本 + sha256 可复验；tag 树内含发布留档 | ⬜ 待 M6 |
 | 文件监听实时模式 | 扩展项 | 不入首期 | — | ⬜ 扩展 |
 | CI 前置检查 | 扩展项 | 不入首期 | — | ⬜ 扩展 |
@@ -273,3 +275,33 @@
 
 **详细版（含 DoD 逐项证据与偏差说明）在 [06-里程碑.md](06-里程碑.md) M4 节与
 [07-交付对标与决策记录.md](07-交付对标与决策记录.md) §十**——这里只列可指认的替代证据与缺口。
+
+---
+
+## 十二、M5 收尾：诚实口径与本地等价校验
+
+**措辞纪律沿用 §七–§十一（硬约束）**：本仓**仍无远端**，`git push` 一次都没跑过，因此 M5 **同样从未出现
+"CI 绿"字样**；一切 CI 类结论只写"**本地等价校验（未接远端，CI 待首推验证）**"。
+
+**可指认的替代证据**（本机实跑，2026-10-18）：
+
+| 等价物 | 结果 |
+|---|---|
+| `py -3.8 -X utf8 -m pytest -q` | **364 passed / 1 skipped**（退出码 0） |
+| `py -3.12 -X utf8 -m pytest -q` | **364 passed / 1 skipped**（退出码 0） |
+| `py -3.12 -X utf8 tools/verify_offline.py --strict` | **38 用例全过**（M4 为 35：新增 `bench` 模块 3 条 + console 1 条，退役「未就绪」2 条），退出码 0 |
+| `py -3.12 -X utf8 -m agent_conflict_radar bench` | **15/15 场景通过、174 项检查 0 失败**，覆盖度门槛达标，退出码 0；`bench/last_run.json` 落盘 |
+| `py -3.12 -X utf8 -m agent_conflict_radar.bench.gen --check` | 两层断言 + 提交 sha 复算全过（`last_run.json` 作为运行产物被**单名放行**），退出码 0 |
+| `py -3.12 -X utf8 tools/verify_mutation.py` | 基线绿 + **36 组**变异全部被对应守门抓到（M4 为 33），仓库按字节还原，退出码 0 |
+| 干净 venv（`py -3.12 -m venv` + `pip install -e ".[dev]"`） | `radar --version` / `config` / `selftest` / `bench --only` / `bench --bench-dir bench --out-dir out` / `python -m agent_conflict_radar.bench.gen --check` 全过；`out/last_run.json` 生成 |
+| 隐私审计 | 入库内容扫描：真实盘符路径 / `/Users/` / `/home/` / Real-UUID / 真实用户名 **零命中**；零网络导入面审计通过 |
+
+**M5 新增的"等价"缺口（写清）**：
+
+1. **干净环境只在本机 Windows / Python 3.12 上做过**；干净 clone（`--no-local`）已建但未逐条跑 README（M6 做）。
+2. **`bench` 全矩阵约 20s**：冒烟只跑 `--only` 子集，全量在测试与独立步骤里跑。
+3. **跨平台逐字节一致没有实跑**：`last_run.json` 双跑一致只验同机同解释器。
+4. **`bench` 与 `detect` 共用退出码 1**：语义区分靠人读输出措辞与 README，没有第二套码（K1 四语义的约束）。
+
+**详细版在 [06-里程碑.md](06-里程碑.md) M5 节与 [07-交付对标与决策记录.md](07-交付对标与决策记录.md) §十一。**
+

@@ -4,7 +4,7 @@
 **新增错误类型必须归入 K1 的语义之一**；不要在下游代码里另写一份"哪种情况给哪个码"的判断。
 """
 
-from .exit_codes import EXIT_ENVIRONMENT, EXIT_NOT_READY, EXIT_USAGE
+from .exit_codes import EXIT_ENVIRONMENT, EXIT_USAGE
 
 
 class RadarError(Exception):
@@ -44,14 +44,6 @@ class ReadOnlyViolation(RadarError):
     exit_code = EXIT_ENVIRONMENT
 
 
-class StageNotReady(RadarError):
-    """阶段未就绪：命令的计划里程碑尚未落地（骨架期专用）。"""
-
-    exit_code = EXIT_NOT_READY  # 引用 exit_codes 常量，避免出现第二份 "4"
-
-    def __init__(self, command: str, milestone: str) -> None:
-        super().__init__(
-            "命令 %r 尚未交付：计划在 %s 落地（骨架期显式拦截，不伪造空结果）" % (command, milestone)
-        )
-        self.command = command
-        self.milestone = milestone
+#: 骨架期曾有 `StageNotReady`（exit 4）。M5 起命令面 7/7 全部交付，该错误类型与退出码 4
+#: 一并退役（K1 四步）。这里**刻意不留空壳类**：留一个没人能触发的错误类型，
+#: 读者会以为"还有没交付的命令"，也让 `exit_codes` 的四语义看起来是五语义。

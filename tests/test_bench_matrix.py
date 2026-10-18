@@ -379,3 +379,27 @@ def test_truth_sha256_in_manifest_matches_the_file():
         path = BENCH_DIR / "scenarios" / entry["id"] / "truth.json"
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         assert entry["truth_sha256"] == digest, "%s 的台账 sha256 与文件不符" % entry["id"]
+
+
+def test_check_tolerates_the_runtime_product_but_not_generator_products(tmp_path):
+    """`last_run.json` 是**运行产物**，不是生成物；`--check` 必须放行它，但**只放行它**。
+
+    两端都要断言，否则就是假门：
+    * 只断"有 last_run.json 时 --check 仍绿"→ 如果实现把整个比对关掉，这条照样绿；
+    * 只断"多余文件会红"→ 不能证明 `last_run.json` 真的被放行。
+    """
+    import shutil
+
+    copied = tmp_path / "bench"
+    shutil.copytree(str(BENCH_DIR), str(copied))
+
+    # 1) 放行运行产物：写一份 last_run.json → --check 仍全过。
+    (copied / "last_run.json").write_text(
+        serialize.dumps_json({"bench": {}, "summary": {"all_passed": True}}), encoding="utf-8"
+    )
+    assert gen.check(str(copied)) == []
+
+    # 2) 只放行**这一个**名字：换个名字的陈旧文件 → 必须红（验证放行面没有变宽）。
+    (copied / "stale-run.json").write_text("{}\n", encoding="utf-8")
+    failures = gen.check(str(copied))
+    assert any("stale-run.json" in item for item in failures), failures

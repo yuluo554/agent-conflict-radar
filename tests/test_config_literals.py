@@ -65,6 +65,7 @@ REQUIRED_MODULES = (
     "bench/__init__.py",
     "bench/gen.py",
     "bench/rng.py",
+    "bench/score.py",
 )
 
 

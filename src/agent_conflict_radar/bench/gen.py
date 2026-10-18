@@ -2379,17 +2379,24 @@ def _tree_files(root: str) -> Dict[str, str]:
     return files
 
 
+#: 生成器产物面之外的**运行产物**（`radar bench` 写得出来的，不由 `--out` 生成）。
+#: `last_run.json` 是"最近一次评分结果"，形态随评分逻辑变化，**不属于生成物的逐字节比对面**；
+#: 它仍受"机器无关"约束（`_check_no_machine_paths` 照样扫它），并由 `tests/test_bench.py`
+#: 单独钉住"同一矩阵双跑逐字节一致"。
+RUNTIME_PRODUCTS = frozenset({"last_run.json"})
+
+
 def _compare_trees(left: str, right: str) -> List[str]:
     left_files = _tree_files(left)
     right_files = _tree_files(right)
     failures: List[str] = []
-    missing = sorted(set(right_files) - set(left_files))
-    extra = sorted(set(left_files) - set(right_files))
+    missing = sorted(set(right_files) - set(left_files) - RUNTIME_PRODUCTS)
+    extra = sorted(set(left_files) - set(right_files) - RUNTIME_PRODUCTS)
     if missing:
         failures.append("重跑生成器后缺失这些产物：%s" % missing)
     if extra:
         failures.append("冻结目录里有生成器不再产出的陈旧文件：%s" % extra)
-    for rel in sorted(set(left_files) & set(right_files)):
+    for rel in sorted((set(left_files) & set(right_files)) - RUNTIME_PRODUCTS):
         if left_files[rel] != right_files[rel]:
             failures.append("产物 %s 与冻结产物不逐字节一致" % rel)
     if not left_files:

@@ -344,6 +344,6 @@ def test_detect_creates_no_file_without_out_dir(tmp_path):
 
 
 def test_detect_is_not_staged_anymore():
-    """`detect` 已交付 ⇒ 不得残留在阶段未就绪表里（幽灵语义）。"""
+    """K15 退役纪律：`detect` 在交付表里，且"未就绪"这张表已整条退役（M5，K1 四步）。"""
     assert "detect" in stages.DELIVERED_COMMANDS
-    assert "detect" not in stages.STAGE_NOT_READY
+    assert not hasattr(stages, "STAGE_NOT_READY"), "命令面 7/7 已全部交付：不应再有未就绪表"

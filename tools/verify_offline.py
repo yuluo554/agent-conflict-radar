@@ -5,10 +5,12 @@
 
 覆盖四件事：
 
-1. **退出码契约**（K1）：每条已交付命令 + 每条阶段未就绪命令 + 用法错误 + 依赖缺失。
-   ⚠️ 纪律（K15）：某条命令交付时，**同一次提交里**改 `stages.py` 把它的名字挪到已交付集合，
+1. **退出码契约**（K1）：每条已交付命令 + 用法错误 + 依赖缺失。
+   ⚠️ 纪律（K15）：某条命令交付时，**同一次提交里**改 `stages.py` 把它的名字挪进已交付集合，
    本脚本的期望值随之从"4"变成真实契约——四处（stages / CLI / README / 本脚本）不同步就会
    出现"断言过期"，那会让 CI 四腿同点全红，或者让命令从未被真跑过。
+   **M5 起命令面 7/7 全部交付**：原"阶段未就绪（exit 4）"的两段用例**整段退役**，
+   不是留成空循环（空循环永远绿，那是假门）。
 2. **两条调用通路**：`python -m agent_conflict_radar` 与裸 `radar`（`sys.path` 来源不同，
    只跑前者会漏掉"我们的包没进安装面"这类缺陷）。
 3. **零网络导入面审计**：源码里不得出现网络类标准库/第三方库的导入。
@@ -42,7 +44,6 @@ from agent_conflict_radar.cli import _ensure_utf8_stdio, build_parser  # noqa: E
 from agent_conflict_radar.exit_codes import (  # noqa: E402
     EXIT_CONFLICTS_FOUND,
     EXIT_ENVIRONMENT,
-    EXIT_NOT_READY,
     EXIT_OK,
     EXIT_USAGE,
 )
@@ -257,7 +258,6 @@ def _scan_argv(fixture, *prefix):
         "--now", "2026-01-01T00:10:00Z",
     ]
 
-
 def _intent_argv(fixture, *prefix):
     repo, claude_root, codex_root = fixture
     return list(prefix) + [
@@ -292,6 +292,18 @@ def _report_argv(fixture, *prefix, **kwargs):
         argv += ["--format", fmt]
     if out_dir is not None:
         argv += ["--out-dir", out_dir]
+    return argv
+
+
+def _bench_argv(*prefix, **kwargs):
+    """`bench` 不接 `--repo`（它物化自己的合成仓库），只接 `--bench-dir` / `--out-dir` / `--only`。"""
+    argv = list(prefix) + ["bench"]
+    if kwargs.get("bench_dir") is not None:
+        argv += ["--bench-dir", kwargs["bench_dir"]]
+    if kwargs.get("out_dir") is not None:
+        argv += ["--out-dir", kwargs["out_dir"]]
+    if kwargs.get("only") is not None:
+        argv += ["--only", kwargs["only"]]
     return argv
 
 
@@ -442,25 +454,45 @@ def build_cases(repo_dir: str) -> List[Case]:
         )
     )
 
-    # ---- 阶段未就绪命令（当前契约：exit 4）----
-    for command in sorted(stages.STAGE_NOT_READY):
-        argv = _module_argv(command) + _repo_flag_if_supported(command, repo_dir)
-        cases.append(
-            Case(
-                "module:%s(阶段未就绪)" % command,
-                argv,
-                EXIT_NOT_READY,
-                cwd=repo_dir,
-                command=command,
-                note="交付该命令时本期望值必须同步改为真实契约（K15）",
-            )
+    # ---- 已交付：bench（M5；跑**冻结矩阵的一个子集**——全矩阵约 20s，冒烟要的是通路而不是全量）----
+    bench_dir = os.path.join(REPO_ROOT, "bench")
+    bench_out = os.path.join(repo_dir, "bench-out")
+    cases.append(
+        Case(
+            "module:bench(--only 一条)",
+            _bench_argv(*_module_argv(), bench_dir=bench_dir, out_dir=bench_out, only="negative_no_overlap"),
+            EXIT_OK,
+            cwd=repo_dir,
+            command="bench",
+            note="全部场景通过 → exit 0；同时落 last_run.json（K2 原子写）",
         )
+    )
+    cases.append(
+        Case(
+            "usage:bench --only 未知 id",
+            _bench_argv(*_module_argv(), bench_dir=bench_dir, only="no-such-scenario"),
+            EXIT_USAGE,
+            cwd=repo_dir,
+            command="bench",
+            note="未知场景 id 是用法错误（exit 2），不是“零条通过”（会被读成成功）",
+        )
+    )
+    cases.append(
+        Case(
+            "env:bench 矩阵目录缺失",
+            _bench_argv(*_module_argv(), bench_dir=os.path.join(repo_dir, "no-such-bench")),
+            EXIT_ENVIRONMENT,
+            cwd=repo_dir,
+            command="bench",
+            note="矩阵目录不存在 → exit 3，不得退化成 exit 0 空结果",
+        )
+    )
 
     # ---- 用法错误（2）----
     cases.append(
         Case("usage:未知子命令", _module_argv("definitely-not-a-command"), EXIT_USAGE, cwd=repo_dir, command="--none--")
     )
-    for command in ("scan", "intent", "detect", "report"):
+    for command in ("scan", "intent", "detect", "report", "bench"):
         cases.append(
             Case(
                 "usage:%s 未知旗标" % command,
@@ -560,12 +592,16 @@ def console_script_cases(repo_dir: str) -> List[Case]:
             cwd=repo_dir,
             command="report",
         ),
+        Case(
+            "console:bench(--only 一条)",
+            _bench_argv("radar", bench_dir=os.path.join(REPO_ROOT, "bench"),
+                        out_dir=os.path.join(repo_dir, "bench-out-console"),
+                        only="negative_no_overlap"),
+            EXIT_OK,
+            cwd=repo_dir,
+            command="bench",
+        ),
     ]
-    for command in sorted(stages.STAGE_NOT_READY):
-        argv = ["radar", command] + _repo_flag_if_supported(command, repo_dir)
-        cases.append(
-            Case("console:%s(阶段未就绪)" % command, argv, EXIT_NOT_READY, cwd=repo_dir, command=command)
-        )
     return cases
 
 
@@ -608,6 +644,7 @@ def audit_command_coverage(cases: Sequence[Case], console_cases: Sequence[Case])
     ⚠️ 这条审计的判据不能写成 `DELIVERED | STAGE_NOT_READY == all_commands()`——那两侧
     本就是同一个并集，恒等式恒真，等于没审（首版就是这样，属"假门"）。真判据是
     "用例表里有没有 `command == <某命令>` 的条目"，它会在**漏掉用例**时真红。
+    M5 起只有一张表（没有"未就绪"），但判据不变：**用例面**才是被审的对象。
     """
     covered = {case.command for case in list(cases) + list(console_cases)}
     failures = []
@@ -645,7 +682,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     print("== 命令覆盖自检（并排数一遍）==")
     coverage_failures = audit_command_coverage(cases, console_cases)
     print("   已交付：%s" % ", ".join(stages.DELIVERED_COMMANDS))
-    print("   阶段未就绪：%s" % ", ".join("%s(%s)" % (k, v) for k, v in sorted(stages.STAGE_NOT_READY.items())))
     for item in coverage_failures:
         print("   [FAIL] %s" % item)
     failures.extend(coverage_failures)

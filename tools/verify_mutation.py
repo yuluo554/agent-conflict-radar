@@ -67,12 +67,12 @@ MUTATIONS: List[Mutation] = [
     Mutation(
         "M4",
         "src/agent_conflict_radar/stages.py",
-        'STAGE_NOT_READY = {\n    "bench": "M5",',
-        'STAGE_NOT_READY = {\n    "report": "M4",\n    "bench": "M5",',
-        "tests/test_stage_guard.py::test_no_command_is_unclassified",
-        "把**已退役**的 report 又塞回阶段未就绪表（幽灵语义复活）→ 阶段守卫必须变红。"
-        "锚点必须指向**仍在**未就绪表里的那条命令：M3 交付 `detect` 时锚点由 `detect` 漂到 `report`，"
-        "M4 交付 `report` 后再次漂移——现在只剩 `bench`。这正是三重断言该有的行为",
+        'DELIVERED_COMMANDS = (\n    "config",',
+        'STAGE_NOT_READY = {"bench": "M5"}  # 变异：复活未就绪表\nDELIVERED_COMMANDS = (\n    "config",',
+        "tests/test_cli_contract.py::test_stage_tables_have_no_not_ready_bucket",
+        "把**已退役**的「未就绪」表重新塞回 stages（exit 4 幽灵语义复活）→ `not hasattr` 防复活断言必须变红。"
+        "锚点从 M1–M4 的 `STAGE_NOT_READY` 条目改成了 `DELIVERED_COMMANDS` 的首行："
+        "M5 交付 `bench` 后那张表已经整条删掉，旧锚点无处可落（变异脚本的「锚点未命中」当场报出）",
     ),
     Mutation(
         "M5",
@@ -98,10 +98,12 @@ MUTATIONS: List[Mutation] = [
     Mutation(
         "M7",
         "src/agent_conflict_radar/exit_codes.py",
-        "EXIT_NOT_READY = 4",
-        "EXIT_NOT_READY = 5",
+        "EXIT_ENVIRONMENT = 3",
+        "EXIT_ENVIRONMENT = 5",
         "tests/test_cli_contract.py::test_exit_code_set_is_frozen_and_labelled",
-        "退出码集合被改动 → 退出码契约门禁必须变红",
+        "退出码集合被改动 → 退出码契约门禁必须变红。"
+        "M5 起 `EXIT_NOT_READY` 已删，锚点随之落到 `EXIT_ENVIRONMENT`；"
+        "另有一组 M34 专打「4 不得复活」",
     ),
     Mutation(
         "M8",
@@ -339,6 +341,37 @@ MUTATIONS: List[Mutation] = [
         "    for index, record in enumerate(conflicts, start=1):  # 变异：不再按严重度排序",
         "tests/test_report.py::test_display_order_is_severity_desc_then_level_and_path",
         "报告不再按 severity 降序（直接用引擎的数组序）→ 展示序判据必须变红",
+    ),
+    Mutation(
+        "M34",
+        "src/agent_conflict_radar/exit_codes.py",
+        "ALL_EXIT_CODES = (\n    EXIT_OK,\n    EXIT_CONFLICTS_FOUND,\n    EXIT_USAGE,\n    EXIT_ENVIRONMENT,\n)",
+        "EXIT_NOT_READY = 4  # 变异：复活退出码 4\n"
+        "ALL_EXIT_CODES = (\n    EXIT_OK,\n    EXIT_CONFLICTS_FOUND,\n    EXIT_USAGE,\n"
+        "    EXIT_ENVIRONMENT,\n    EXIT_NOT_READY,\n)",
+        "tests/test_cli_contract.py::test_exit_not_ready_constant_is_gone_and_stays_gone",
+        "把退役的 `EXIT_NOT_READY = 4` 加回来（幽灵语义复活）→ `not hasattr` 防复活断言必须变红。"
+        "这是 K1 四步里第②步点名要求的那条守门",
+    ),
+    Mutation(
+        "M35",
+        "src/agent_conflict_radar/bench/score.py",
+        "    missing = expected_norm - actual_norm\n    extra = actual_norm - expected_norm",
+        "    missing = set()  # 变异：只认多报，漏报永远不报\n"
+        "    extra = actual_norm - expected_norm",
+        "tests/test_bench.py::test_bench_fails_when_a_truth_expectation_is_changed",
+        "评分函数把 `missing` 恒置空（漏报永远抓不到）→ 「改一位期望值必须报未达标」这条"
+        "**打在消费处的探活**必须变红。这是 M5 DoD 硬要求的变异组：只断言正常时 PASS 的基准，"
+        "可能根本没在比对",
+    ),
+    Mutation(
+        "M36",
+        "src/agent_conflict_radar/bench/score.py",
+        '    expected_exit = 1 if truth.get("levels_expected") else 0',
+        '    expected_exit = 0  # 变异：退出码期望恒为 0（不再按真值推）',
+        "tests/test_bench.py::test_every_scenario_passes_on_the_frozen_matrix",
+        "评分把 detect 退出码的期望恒置 0（不再由真值推出）→ 全矩阵 PASS 断言必须变红，"
+        "证明退出码那一项不是装饰",
     ),
 ]
 

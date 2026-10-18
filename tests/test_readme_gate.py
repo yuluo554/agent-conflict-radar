@@ -389,10 +389,16 @@ def test_readme_declared_license_has_a_file(repo_root):
 
 
 def test_readme_states_all_exit_codes_and_config_location(repo_root):
-    """README 必须写出退出码语义与"数值唯一位置"——它们是用户最需要照着找的两样东西。"""
+    """README 必须写出退出码语义与"数值唯一位置"——它们是用户最需要照着找的两样东西。
+
+    M5 起只有四语义：`4 = 阶段未就绪` 已随命令面 7/7 交付整条退役（K1 四步），
+    因此这里断言的是 **0–3 全在、4 不在**。判据不能再写"4 也在"——那会把退役
+    又变回"README 与代码各说一套"。
+    """
     readme = _read(repo_root / "README.md")
-    for code in ("`0`", "`1`", "`2`", "`3`", "`4`"):
+    for code in ("`0`", "`1`", "`2`", "`3`"):
         assert code in readme, "README 未写退出码 %s 的语义" % code
+    assert "| `4` |" not in readme, "退出码 4 已退役：README 不得再把它列成一种语义"
     assert "config/radar.toml" in readme
     assert "plan/06-里程碑.md" in readme
 

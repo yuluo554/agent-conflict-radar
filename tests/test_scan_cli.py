@@ -246,6 +246,6 @@ def test_scan_window_overrides_only_the_call_view(config_path):
 
 
 def test_scan_is_not_staged_anymore():
-    """K1 退役纪律：已交付的命令不得残留在阶段未就绪表里（幽灵语义）。"""
+    """K15 退役纪律：`scan` 在交付表里，且"未就绪"这张表已整条退役（M5，K1 四步）。"""
     assert "scan" in stages.DELIVERED_COMMANDS
-    assert "scan" not in stages.STAGE_NOT_READY
+    assert not hasattr(stages, "STAGE_NOT_READY"), "命令面 7/7 已全部交付：不应再有未就绪表"

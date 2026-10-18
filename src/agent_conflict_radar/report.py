@@ -260,7 +260,8 @@ def render_markdown(
     add("- 扫描窗口：`window.scan_days`")
     add("- 活跃窗：`window.active_minutes`")
     add("- 相邻容差：`symbol.adjacent_tolerance`")
-    add("- 重叠最小行数：`symbol.min_overlap_lines`")
+    add("- 重叠最小行数：`symbol.min_overlap_lines`（**遗留键**：登记键名以保持键空间完整；"
+        "当前判定规则不使用它——见 docs/技术报告.md §九）")
     add("- 严重度档位：`[severity]`（`same_symbol` / `same_file_diff_symbol` / `adjacent_lines` / `file_only`）")
     add("- 区块级试合并开关：`git.merge_tree_enabled`")
     add("- 单条证据条数上限：`report.max_evidence_items`")
