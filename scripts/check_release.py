@@ -186,15 +186,40 @@ class Context(object):
         self.slug = slug
         self._hooks = hooks
         self._sdist_cache: Optional[Dict[str, bytes]] = None
+        self._tree_cache: Optional[Dict[str, bytes]] = None
 
     # ---- 文件与 git ----
+    def tree_ref(self) -> str:
+        """发布树的 ref：**给了 tag 且本地能解析就用 tag，否则用 HEAD**。
+
+        为什么必须这样：tag 之后还会追加"附件登记"提交，`HEAD` 就前进了；若仍从 `HEAD` 建包，
+        得到的就不是 tag 树的内容——"附件与 tag 树逐字节同源"当场失效（本机实测推演过）。
+        """
+        if "tree_ref" in self._hooks:
+            return self._hooks["tree_ref"]()
+        if self.tag:
+            code, out, _err = _run(["git", "rev-parse", "--verify", "%s^{commit}" % self.tag], cwd=self.root)
+            if code == EXIT_PASS:
+                return "%s^{commit}" % self.tag
+        return "HEAD"
+
+    def tree_files(self) -> Dict[str, bytes]:
+        """受控树（`git archive <ref>`）的 `{路径: 字节}`——发布包的内容基准。"""
+        if "tree_files" in self._hooks:
+            return dict(self._hooks["tree_files"]())
+        if self._tree_cache is None:
+            self._tree_cache = _archive_files(self.root, self.tree_ref())
+        return dict(self._tree_cache)
+
     def tracked(self) -> List[str]:
+        """受控树的路径列表（= `tree_files()` 的键，按名字排序）。
+
+        用树而不是 `git ls-files`：tag 之后的追加提交会让索引比 tag 树多出文件，届时
+        "发布包里该有什么"必须以 **tag 树** 为准。
+        """
         if "tracked" in self._hooks:
             return list(self._hooks["tracked"]())
-        code, out, err = _run(["git", "ls-files", "-z"], cwd=self.root)
-        if code != EXIT_PASS:
-            raise EnvironmentMissing("git ls-files 失败：%s" % (err.strip() or code))
-        return [item for item in out.split("\0") if item]
+        return sorted(self.tree_files())
 
     def git(self, *args: str) -> str:
         if "git" in self._hooks:
@@ -205,13 +230,23 @@ class Context(object):
         return out
 
     def read(self, rel: str) -> str:
+        """读文本。**给了 tag 且能解析时读 tag 树的内容**（不是工作区）。
+
+        理由与 `tree_ref()` 相同：tag 之后工作区/`HEAD` 会多出追加提交的文件，
+        而"发布留档 / MANIFEST / pyproject 是不是 tag 里那份"必须以 tag 树为准。
+        """
         if "read" in self._hooks:
             return self._hooks["read"](rel)
+        files = self.tree_files()
+        if rel in files:
+            return files[rel].decode("utf-8")
         return _read(self.root / rel)
 
     def exists(self, rel: str) -> bool:
         if "exists" in self._hooks:
             return self._hooks["exists"](rel)
+        if rel in self.tree_files():
+            return True
         return (self.root / rel).exists()
 
     def bench_dir(self) -> Path:
@@ -225,7 +260,7 @@ class Context(object):
             return dict(self._hooks["sdist_members"]())
         # 一次运行只建一次：C09 与 C10 看的是**同一份**源码包（否则两条结论可能对应两个包）。
         if self._sdist_cache is None:
-            self._sdist_cache = _build_sdist_members(self.root)
+            self._sdist_cache = _build_sdist_members(self.root, self.tree_ref())
         return dict(self._sdist_cache)
 
     # ---- gh（仅 --online 用） ----
@@ -264,7 +299,32 @@ class Context(object):
         return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def _build_sdist_members(root: Path) -> Dict[str, bytes]:
+def _archive_files(root: Path, ref: str) -> Dict[str, bytes]:
+    """`git archive <ref>` → `{路径: 字节}`（受控树的内容基准）。"""
+    completed = subprocess.run(
+        ["git", "archive", "--format=tar", ref], cwd=str(root), stdout=subprocess.PIPE
+    )
+    if completed.returncode != EXIT_PASS:
+        raise EnvironmentMissing("git archive %s 失败（无法导出受控树）" % ref)
+    blob = tempfile.mkdtemp(prefix="radar-rel-archive-")
+    try:
+        archive_path = Path(blob) / "_tree.tar"
+        with open(str(archive_path), "wb") as handle:
+            handle.write(completed.stdout)
+        files: Dict[str, bytes] = {}
+        with tarfile.open(str(archive_path), "r:") as archive:
+            for member in archive.getmembers():
+                if not member.isfile():
+                    continue
+                extracted = archive.extractfile(member)
+                if extracted is not None:
+                    files[member.name] = extracted.read()
+        return files
+    finally:
+        shutil.rmtree(blob, ignore_errors=True)
+
+
+def _build_sdist_members(root: Path, ref: str = "HEAD") -> Dict[str, bytes]:
     """真建一份 sdist，返回 `{包内相对路径: 字节}`。
 
     为什么必须真建：只读 MANIFEST.in 的规则文本无法证明 setuptools 真的照做了——规则写错一个
@@ -283,10 +343,10 @@ def _build_sdist_members(root: Path) -> Dict[str, bytes]:
     try:
         # git archive 走 stdout；tar 是二进制，必须走字节通道（`_run` 是 utf-8 文本通道）。
         completed = subprocess.run(
-            ["git", "archive", "--format=tar", "HEAD"], cwd=str(root), stdout=subprocess.PIPE
+            ["git", "archive", "--format=tar", ref], cwd=str(root), stdout=subprocess.PIPE
         )
         if completed.returncode != EXIT_PASS:
-            raise EnvironmentMissing("git archive 失败（无法导出受控树）")
+            raise EnvironmentMissing("git archive %s 失败（无法导出受控树）" % ref)
         archive_path = Path(export_dir) / "_tree.tar"
         with open(str(archive_path), "wb") as handle:
             handle.write(completed.stdout)
@@ -537,16 +597,18 @@ def check_matrix_machine_independent(ctx: Context) -> List[str]:
 
 
 def check_commit_surface_desensitized(ctx: Context) -> List[str]:
-    """C07 提交面脱敏：入库内容 + **提交元数据邮箱**（代码干净 ≠ 提交面干净）。"""
+    """C07 提交面脱敏：入库内容 + **提交元数据邮箱**（代码干净 ≠ 提交面干净）。
+
+    扫描面取**受控树**（tag 树或 HEAD 树），不是工作区文件：工作区里未跟踪的东西不会进仓库。
+    """
     login = getpass.getuser().lower()
     offenders: List[str] = []
-    for rel in ctx.tracked():
-        path = ctx.root / rel
-        if not path.is_file() or path.suffix in (".png", ".jpg", ".jpeg", ".gif", ".pdf", ".zip", ".gz"):
+    for rel, raw in sorted(ctx.tree_files().items()):
+        if rel.rsplit(".", 1)[-1].lower() in ("png", "jpg", "jpeg", "gif", "pdf", "zip", "gz"):
             continue
         try:
-            text = _normalize_newlines(_read(path))
-        except (UnicodeDecodeError, OSError):
+            text = _normalize_newlines(raw.decode("utf-8"))
+        except UnicodeDecodeError:
             continue
         for match in _DRIVE_USER_RE.finditer(text):
             segment = match.group(1).lower()
@@ -569,11 +631,12 @@ def check_commit_surface_desensitized(ctx: Context) -> List[str]:
 
 def check_manifest_coverage(ctx: Context) -> List[str]:
     """C08 MANIFEST.in 白名单覆盖 `bench/`（且无整目录兜底规则）。"""
-    manifest_path = ctx.root / "MANIFEST.in"
-    if not manifest_path.is_file():
+    try:
+        manifest_text = ctx.read("MANIFEST.in")
+    except (OSError, KeyError):
         return ["缺少 MANIFEST.in"]
     tracked = ctx.tracked()
-    covered, broad = manifest_covered(tracked, _read(manifest_path))
+    covered, broad = manifest_covered(tracked, manifest_text)
     failures: List[str] = []
     expected_bench = {
         item
@@ -774,6 +837,61 @@ def check_push_runs_reconciled(ctx: Context) -> List[str]:
     return failures[:10]
 
 
+#: 源码包成员与 tag 树之间**允许**不同的名字（都是打包/工具生成的，不是源码内容）。
+_PACKAGE_METADATA = frozenset({"PKG-INFO", "setup.cfg"}) | GENERATED_EGG_INFO
+
+
+def check_attachment_matches_tag_tree(ctx: Context) -> List[str]:
+    """O07 本体一致性：Release 附件（下载复算过的那份）与 **tag 树**逐字节同源。
+
+    为什么单列一条：O05 只核对"名字 + 字节数"、O06 只核对"sha256 与登记一致"。两者都通过，
+    仍然可能是"登记时就算错了"或"传的是另一个包"。这条把**远端的字节**与**tag 树的字节**
+    直接比：解包附件 → 逐个文件与 `git archive <tag>` 的内容比对（只放行打包器生成的元数据）。
+    """
+    ledger = _ledger(ctx)
+    entries = ledger.get("assets", [])
+    if not entries:
+        return ["附件登记为空：无可比对对象"]
+    tree = ctx.tree_files()
+    work = Path(tempfile.mkdtemp(prefix="radar-rel-identity-"))
+    failures: List[str] = []
+    try:
+        for entry in entries:
+            name = entry["name"]
+            try:
+                path = ctx.download_asset(name, work)
+            except EnvironmentMissing as exc:
+                failures.append(str(exc))
+                continue
+            try:
+                with tarfile.open(str(path), "r:*") as archive:
+                    members = {
+                        member.name.split("/", 1)[1]: archive.extractfile(member).read()
+                        for member in archive.getmembers()
+                        if member.isfile() and "/" in member.name
+                    }
+            except tarfile.TarError as exc:
+                failures.append("附件 %r 不是可读的 tar 包：%s" % (name, exc))
+                continue
+            missing = sorted(set(tree) - set(members) - _PACKAGE_METADATA)
+            extra = sorted(set(members) - set(tree) - _PACKAGE_METADATA)
+            if missing:
+                failures.append("附件 %r 缺 tag 树里的 %d 个文件：%s" % (name, len(missing), missing[:5]))
+            if extra:
+                failures.append("附件 %r 有 tag 树没有的 %d 个文件：%s" % (name, len(extra), extra[:5]))
+            differing = sorted(
+                rel for rel in set(tree) & set(members) if tree[rel] != members[rel]
+            )
+            if differing:
+                failures.append(
+                    "附件 %r 与 tag 树内容不一致（%d 个文件）：%s"
+                    % (name, len(differing), differing[:5])
+                )
+        return failures[:10]
+    finally:
+        shutil.rmtree(str(work), ignore_errors=True)
+
+
 def _ledger(ctx: Context) -> Dict[str, Any]:
     path = ctx.root / ASSET_LEDGER_RELPATH
     if not path.is_file():
@@ -849,6 +967,7 @@ ONLINE_CHECKS: List[Tuple[str, str, Callable[[Context], List[str]]]] = [
     ("O04", "push 事件 ↔ run 对账（tag/branch 各一条且都绿）", check_push_runs_reconciled),
     ("O05", "Release 附件集合与登记一致", check_release_assets_match_ledger),
     ("O06", "逐个下载附件复算 sha256", check_assets_sha256_recomputed),
+    ("O07", "附件与 tag 树逐字节同源", check_attachment_matches_tag_tree),
 ]
 
 
@@ -1025,6 +1144,29 @@ def _mutation_worlds() -> List[Mutation]:
 
         return Context(root, tag="v0.0.1", download_asset=download)
 
+    def o07() -> Context:
+        # 附件里 tag 树中那个文件的内容被改了一个字节：sha256 登记可以照样对（因为登记也按坏包算），
+        # 但"与 tag 树逐字节同源"必须变红。
+        root = _tmp_tree({"plan/release-assets.json": json.dumps({
+            "assets": [{"name": "a.tar.gz", "sha256": "0" * 64, "size": 1}]
+        })})
+
+        def download(name: str, dest: Path) -> Path:
+            target = Path(dest) / name
+            inner = Path(dest) / "_inner"
+            (inner / "src").mkdir(parents=True, exist_ok=True)
+            (inner / "src" / "mod.py").write_text("TAMPERED = 1\n", encoding="utf-8")
+            with tarfile.open(str(target), "w:gz") as archive:
+                archive.add(str(inner / "src" / "mod.py"), arcname="pkg-0.0.1/src/mod.py")
+            return target
+
+        return Context(
+            root,
+            tag="v0.0.1",
+            download_asset=download,
+            tree_files=lambda: {"src/mod.py": b"GOOD = 1\n"},
+        )
+
     return [
         Mutation("R01", "C01", "工作树脏 → C01 必红", c01),
         Mutation("R02", "C02", "跟踪面含 out/ → C02 必红", c02),
@@ -1042,6 +1184,7 @@ def _mutation_worlds() -> List[Mutation]:
         Mutation("R14", "O04", "缺 tag push 的 run → O04 必红", o04),
         Mutation("R15", "O05", "附件集合与登记不符 → O05 必红", o05),
         Mutation("R16", "O06", "下载内容与 sha256 不符 → O06 必红", o06),
+        Mutation("R17", "O07", "附件内容与 tag 树不一致 → O07 必红", o07),
     ]
 
 

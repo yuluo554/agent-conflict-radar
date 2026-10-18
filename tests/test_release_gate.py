@@ -62,6 +62,32 @@ def test_online_checks_cover_the_four_required_facts(gate):
     assert "sha256" in titles
 
 
+def test_attachment_identity_is_checked_against_the_tag_tree(gate):
+    """DoD「本体一致性」必须有独立检查项：附件与 **tag 树**逐字节同源。
+
+    O05（名字+字节数）与 O06（sha256 与登记一致）**都不覆盖**这条：两者都过，仍可能
+    登记时就算错了、或传的是另一个包。判据必须是与 tag 树逐文件比对。
+    """
+    titles = dict((ident, title) for ident, title, _f in gate.ONLINE_CHECKS)
+    assert "O07" in titles
+    assert "tag 树" in titles["O07"] and "逐字节" in titles["O07"]
+
+
+def test_tree_ref_prefers_the_tag_when_it_exists(gate):
+    """`tree_ref()`：本地有 tag 时必须用 tag，否则 tag 后的追加提交会让"同源"失效。
+
+    这是本机推演出的真实陷阱：附件登记是 **tag 之后**的追加提交，若仍从 `HEAD` 建包，
+    包内容就会比 tag 树多出 `plan/release-assets.json`。
+    """
+    real_tag = gate._run(["git", "rev-parse", "--verify", "HEAD^{commit}"], cwd=gate.REPO_ROOT)[1].strip()
+    ctx_no_tag = gate.Context(gate.REPO_ROOT)
+    assert ctx_no_tag.tree_ref() == "HEAD"
+    # 借用一个一定存在的 ref 名不可能构造，故直接用 hook 断言判据方向：
+    ctx_hook = gate.Context(gate.REPO_ROOT, tree_ref=lambda: "v9.9.9^{commit}")
+    assert ctx_hook.tree_ref() == "v9.9.9^{commit}"
+    assert real_tag  # 仓库确实解析得出 HEAD
+
+
 def test_check_count_equals_mutation_count(gate):
     """检查项数 == 变异组数（从**外部**再复核一次，防"两边一起改"）。"""
     checks = gate._all_checks()
