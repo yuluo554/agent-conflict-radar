@@ -26,7 +26,8 @@
 | [HANDOFF-M3.md](HANDOFF-M3.md) | 上一棒交接（M2→M3）：进度+证据 / 待办 / K 口径 / 环境坑 / DoD / 命令速查 | ✅ 已落盘 2026-10-18（M3 已按它完成，留作过程留档） |
 | [HANDOFF-M4.md](HANDOFF-M4.md) | 上一棒交接（M3→M4）：进度+证据 / 待办 / K 口径 / 环境坑 / DoD / 命令速查 | ✅ 已落盘 2026-10-18（M4 已按它完成，留作过程留档） |
 | [HANDOFF-M5.md](HANDOFF-M5.md) | 上一棒交接（M4→M5）：进度+证据 / 待办 / K 口径 / 环境坑 / DoD / 命令速查 | ✅ 已落盘 2026-10-18（M5 已按它完成，留作过程留档） |
-| [HANDOFF-M6.md](HANDOFF-M6.md) | 下一棒交接（M5→M6）：进度+证据 / 待办 / K 口径 / 环境坑 / DoD / 命令速查 | ✅ M5 收尾时落盘 2026-10-18 |
+| [HANDOFF-M6.md](HANDOFF-M6.md) | 下一棒交接（M5→M6）：进度+证据 / 待办 / K 口径 / 环境坑 / DoD / 命令速查 | ✅ M5 收尾时落盘 2026-10-18（M6 已按它完成本地面；M6 为最后一棒，**不写 HANDOFF-M7**） |
+| [RELEASE-M6.md](RELEASE-M6.md) | 发布留档：坐标 / 发布门判据 / 源码包边界 / 步骤顺序 / DoD 三件套 / 诚实口径 / **§八 tag 后追加事实** | ✅ tag 前落盘 2026-10-18（§八 待发布后追加） |
 | [../docs/技术报告.md](../docs/技术报告.md) | 技术报告（归集口径 / 试合并边界 / AST 方法 / 严重度口径 / 隐私设计 / 基准可复现性） | ✅ M5 落盘 2026-10-18（M6 定稿） |
 
 > 里程碑收尾纪律沿用系列惯例：**DoD 达成后必须在本对话内写完下一棒的 `HANDOFF-M<next>.md` 才允许结束**。
@@ -106,8 +107,8 @@
 | **M2 意图提取**（2026-10-18 完成） | ①`intent.py`：Claude `Edit`/`Write`/`MultiEdit` + Codex `apply_patch`（含 `exec` 同形变体）；②三分法 `exact`/`coarse`/`unknown` + 计数恒等式；③磁盘对账（`git diff` / `git diff --cached`，磁盘是事实）；④R4 闭环（非 Python 行区间近似） | 见 [06-里程碑.md](06-里程碑.md) M2 节"收尾结论"。**本地等价校验结果**：`py -3.8`/`py -3.12` 各 **248 passed / 1 skipped**；离线冒烟 `--strict` **27 用例全过**；**变异验证 22 组**全部被对应守门抓到；`bench/gen.py --check` 两层断言 + 提交 sha 复算 + 意图矩阵脏改动现场复核全过。未接远端 → CI 待首推验证 |
 | **M3 三级检测**（2026-10-18 完成） | ①`detect.py` 三级实现（文件级 = 两个活跃 `(workspace, session)` 组同改同一文件；②区块级 = 两侧分支 `git merge-tree --write-tree` 的冲突路径；③符号级 = `HEAD` 版本 AST 的同一 / 相邻符号）；④`gitio.merge_tree` 只读封装（白名单 / 超时 / 输出解析）；⑤`derived_from` 去重（场景 4）；⑥只读断言测试 | 见 [06-里程碑.md](06-里程碑.md) M3 节「收尾结论」。**本地等价校验结果**：`py -3.8`/`py -3.12` 各 **299 passed / 1 skipped**；离线冒烟 `--strict` **29 用例全过**；**变异验证 29 组**全部被对应守门抓到；七条冻结场景的 `levels` / `symbols` 集合精确匹配（多报漏报均失败），三态（`degraded` / `approximate` / `unsupported_format`）各有合成用例。**M3 未新增冻结场景、未改冻结产物**（检出对账复用 M1 冲突矩阵）。未接远端 → CI 待首推验证 |
 | **M4 预警报告**（2026-10-18 完成） | ①`report.py`：Markdown + JSON **单一渲染源**（JSON = `detect` 的 `conflicts.json`，Markdown 是它的纯函数）；②严重度降序 + `(level, path, symbols)` 稳定排序；③建议是**规则模板**（按 `severity_key` 分派）；④`undetermined` 独立小节逐条列出；⑤参数来源块只引用键名（不复制数值）；⑥可选通知 + `notify_unavailable` | 见 [06-里程碑.md](06-里程碑.md) M4 节「收尾结论」。**本地等价校验结果**：`py -3.8`/`py -3.12` 各 **336 passed / 1 skipped**；离线冒烟 `--strict` **35 用例全过**（report 模块通路 5 条 + console 通路 3 条）；**变异验证 33 组**全部被对应守门抓到。渲染三律各有实物：AST 零判定门禁（含可证伪探针）/ 零外链常驻渲染出口（带 URL 的 payload 当场抛错）/ 双跑逐字节一致（真子进程）。**M4 未新增冻结场景、未改冻结产物**。未接远端 → CI 待首推验证 |
-| **M5 基准与自检** | 完整冲突矩阵、覆盖度门槛、`radar bench` 一条命令评分 | 全部场景通过；`pip install .` 干净环境实跑；断网运行 |
-| **M6 发布** | 发布 GitHub **公开**仓库 | **DoD 三件套**：①`git tag`；②**GitHub Release 附产物**（源码 zip，本地留副本 + **sha256 留档可复验**）；③**发布留档文件**（`plan/RELEASE-M6.md`，**在 tag 之前写好并进 tag 树**）。另：发布前跑 `scripts/check_release.py` 无 FAIL；提交面脱敏全 0（含 tag tagger 邮箱）；tag 后事实（附件 sha256 / 下载复核）作为**追加提交**分栏记录 |
+| **M5 基准与自检**（2026-10-18 完成） | 完整冲突矩阵、覆盖度门槛、`radar bench` 一条命令评分 | 见 [06-里程碑.md](06-里程碑.md) M5 节。**本地等价校验结果**：`py -3.8`/`py -3.12` 各 **365 passed / 1 skipped**；离线冒烟 `--strict` **38 用例全过**；**变异验证 36 组**全部被对应守门抓到；`radar bench` 整矩阵 **15/15 场景、174 项检查**，exit 0；干净 venv + 干净 clone（`--no-local`）实跑全过。未接远端 → CI 待首推验证 |
+| **M6 发布**（本地面 2026-10-18 完成，**远程面待执行**） | 发布 GitHub **公开**仓库 | **DoD 三件套**：①`git tag`；②**GitHub Release 附产物**（源码 zip，本地留副本 + **sha256 留档可复验**）；③**发布留档文件**（`plan/RELEASE-M6.md`，**在 tag 之前写好并进 tag 树**）。另：发布前跑 `scripts/check_release.py` 无 FAIL；提交面脱敏全 0（含 tag tagger 邮箱）；tag 后事实（附件 sha256 / 下载复核）作为**追加提交**分栏记录。**本轮已交付**：发布门（离线 C01–C10 + 在线 O01–O06 + 16 组门自身变异，本机 10/10 PASS、16↔16 全抓到）、`MANIFEST.in` 白名单（101 个 bench 文件入包、`last_run.json` 显式排除）、tag 前留档；**未执行**：建仓 / push / CI / tag / Release（属对外动作，须用户确认） |
 
 **M6 DoD 口径锁定**：采用 **A) "Release 附产物"**——源码 zip 为手工上传附件，本地必须存在同名副本与 sha256 留档，**不得**以"仓库 zipball 即产物"替代。三件套缺任一项即视为发布未达成。
 
@@ -310,3 +311,34 @@
 
 **详细版在 [06-里程碑.md](06-里程碑.md) M5 节与 [07-交付对标与决策记录.md](07-交付对标与决策记录.md) §十一。**
 
+
+---
+
+## 十三、M6 收尾：诚实口径与本地等价校验（**发布前**）
+
+**措辞纪律（硬约束）**：远端动作**尚未执行**（建仓 / push / tag / Release 待用户确认），
+因此本节**仍不出现「CI 绿」字样**；一切结论只写"本地等价校验"。远端事实在
+[RELEASE-M6.md](RELEASE-M6.md) §八「tag 后追加事实」按真实 UTC 时刻追加。
+
+| 等价物 | 结果 |
+|---|---|
+| `py -3.8 -X utf8 -m pytest -q` | **381 passed / 1 skipped**（M5 为 365/1；新增 `tests/test_release_gate.py` 16 条） |
+| `py -3.12 -X utf8 -m pytest -q` | **381 passed / 1 skipped** |
+| `py -3.12 -X utf8 tools/verify_offline.py --strict` | **38 用例全过** |
+| `radar bench`（整矩阵） | **15/15 场景、174 项检查、覆盖度达标**，exit 0 |
+| `python -m agent_conflict_radar.bench.gen --check` | 两层断言 + 提交 sha 复算全过 |
+| `tools/verify_mutation.py` | **36 组**全部被对应守门抓到，仓库按字节还原 |
+| `scripts/check_release.py` | 离线 **C01–C10 无 FAIL** |
+| `scripts/check_release.py --mutation` | **16 条检查 ↔ 16 条变异**，逐条被打红 |
+| 脱敏 | 入库内容 + **提交元数据邮箱**零真实值（提交身份全为 GitHub noreply） |
+| 源码包自足 | `git archive` 导出受控树 → 真建 sdist → **101 个 bench 文件入包**、`last_run.json` 不在 → 解包后**从解包目录之外**跑 `--version` / `selftest` / `bench --only` 全过 |
+
+**M6 新增的"等价"缺口（写清）**：
+
+1. **远端面全部未执行**：`--online` 的六条检查只经过变异验证（注入坏世界），**没有一次真实 gh 调用的成功记录**。
+2. **干净 venv / 干净 clone 沿用 M5 结论**：M6 未重跑；C10 的"解包即用"是解包 + `PYTHONPATH` 的模块通路，
+   不是独立安装。
+3. **跨平台逐字节一致仍未实测**（与 M5 同一边界）。
+4. **`check_push_runs_reconciled` 的"一 workflow"前提**未在双 workflow 情形下实测。
+
+**详细版在 [06-里程碑.md](06-里程碑.md) M6 节与 [07-交付对标与决策记录.md](07-交付对标与决策记录.md) §十二·§十三。**

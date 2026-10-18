@@ -6,9 +6,11 @@
 
 ---
 
-## ✅ 当前状态：M5 已交付（2026-10-18），命令面 7/7
+## ✅ 当前状态：M6 已交付（2026-10-18），命令面 7/7，发布门离线 10 条 + 在线 6 条
 
-七条命令全部落地，合成冲突矩阵与意图矩阵已入仓可审计，`radar bench` 可**一键复跑评分**：
+七条命令全部落地，合成冲突矩阵与意图矩阵已入仓可审计，`radar bench` 可**一键复跑评分**。
+`scripts/check_release.py` 是**发布终态自检门**（离线 C01–C10 / 在线 O01–O06，刻意不进 CI），
+它自己也做了 16 组变异验证（**检查项数 == 变异组数**）。
 
 | 命令 | 状态 | 计划里程碑 |
 |---|---|---|
@@ -35,7 +37,8 @@ M5 起**没有"阶段未就绪"这第五条退出码**：`4` 随最后一条命�
 
 **`radar report` 的退出码语义**：与 `detect` **同一条口径**——**有冲突 → 1，无冲突 → 0**。它不重新判定：报告只消费 `detect` 的结论（渲染层零判定）。`undetermined` / `degraded` / `approximate` **不改**退出码，但报告里有独立的「未判定」小节逐条列出。环境问题（非 git 仓库 / 会话源不存在 / git 超时）仍是 exit 3；未知 `--format` → exit 2。
 
-进度与逐棒 DoD 见 [`plan/06-里程碑.md`](plan/06-里程碑.md)；下一棒交接见 [`plan/HANDOFF-M5.md`](plan/HANDOFF-M5.md)。
+进度与逐棒 DoD 见 [`plan/06-里程碑.md`](plan/06-里程碑.md)；发布留档见
+[`plan/RELEASE-M6.md`](plan/RELEASE-M6.md)（tag 前内容 + 文末「tag 后追加事实」分栏）。
 
 ---
 
@@ -288,6 +291,17 @@ python tools/verify_mutation.py     # 守门变异验证（新增/改写守门�
 
 CI：`.github/workflows/ci.yml`，四矩阵 `windows/ubuntu × Python 3.8/3.12`（每腿依次跑全量测试 → 矩阵自检 → 离线冒烟）。
 
+### 发布终态自检（`scripts/check_release.py`，**刻意不进 CI**）
+
+```bash
+python scripts/check_release.py            # 离线 C01–C10：工作树/产物/名字四向/退出码/矩阵/脱敏/MANIFEST/真建 sdist/解包即用
+python scripts/check_release.py --online --tag v0.0.1   # 在线 O01–O06：公开/tag 指向/CI 逐 job/附件集合/逐个下载复算 sha256
+python scripts/check_release.py --mutation # 门自身变异验证：检查项数 == 变异组数
+```
+
+为什么不在 CI：它判的是"发布这件事做完了没有"（仓库公开、tag、CI 已绿、附件已传），这些状态
+只在发布时才存在——放进 CI 只能被跳过或被放宽，那就是假门。退出码沿用 `0/1/2/3`，不新增第五个码。
+
 **计划文档**（读完 README 想知道"为什么这么设计"就看这里）：
 
 | 文档 | 内容 |
@@ -299,6 +313,7 @@ CI：`.github/workflows/ci.yml`，四矩阵 `windows/ubuntu × Python 3.8/3.12`�
 | [`plan/04-模块详设.md`](plan/04-模块详设.md) | M1–M5 逐模块输入/输出/算法/确定性纪律 |
 | [`plan/05-数据计划.md`](plan/05-数据计划.md) | 合成矩阵格式、植入真值语义、覆盖度门槛 |
 | [`plan/06-里程碑.md`](plan/06-里程碑.md) | M1–M6 目标 / 任务 / DoD / 降级策略 |
+| [`plan/RELEASE-M6.md`](plan/RELEASE-M6.md) | 发布留档：坐标 / 发布门判据 / 源码包边界 / 步骤顺序 / DoD 三件套 / tag 后追加事实 |
 | [`plan/07-交付对标与决策记录.md`](plan/07-交付对标与决策记录.md) | 材料与评分对标、决策记录、既定口径 K 清单 |
 | [`docs/技术报告.md`](docs/技术报告.md) | 技术报告：归集口径 / 试合并边界 / AST 符号方法 / 严重度 / 隐私 / 基准可复现性 |
 | [`data/README.md`](data/README.md) | 依据查证（HN 原话 + 检索式）、本机实测、合成数据纪律 |
