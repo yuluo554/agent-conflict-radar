@@ -189,8 +189,9 @@
 * [x] **退出码 0/1/2/3 各有实物**：全过 0 / 任一失败 1 / 用法 2 / 依赖 3；失败路径 `stdout == b""`
 * [x] **矩阵补全结论**：不需要补（逐类核对达标）；**未改冻结产物**
 * [x] **`min_overlap_lines` 定论**：遗留键，文档与报告都写明"不是判定阈值"
-* [x] **干净 venv**：`pip install -e ".[dev]"` → `--version` / `config` / `selftest` / `bench --only` /
-      `bench --out-dir` / 生成器 `--check` 全过；干净 venv 里 `verify_offline.py --strict` 38/38
+* [x] **干净 venv + 干净 clone（`--no-local`）**：`pip install -e ".[dev]"` → `--version` / `config` /
+      `selftest` / `bench` / `bench --only` / `bench --out-dir` / 生成器 `--check` 全过；
+      冒烟 38/38；整矩阵跑完 `git status` 干净（`last_run.json` **逐字节复现**）
 * [x] **隐私审计**：真实盘符路径 / `/Users/` / `/home/` / Real-UUID / 真实用户名 零命中；零网络导入面通过
 * [x] **桩哨兵**：0 命中（唯一 `NotImplementedError` 是测试里的捕获分支，已解释）
 * [x] **双解释器全量 pytest**：各 365 passed / 1 skipped

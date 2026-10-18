@@ -298,9 +298,14 @@
 
 **M5 新增的"等价"缺口（写清）**：
 
-1. **干净环境只在本机 Windows / Python 3.12 上做过**；干净 clone（`--no-local`）已建但未逐条跑 README（M6 做）。
+1. **干净环境的范围**：已做（2026-10-18，本机 Windows / Python 3.12）：新 venv + `pip install -e ".[dev]"`
+   + **`git clone --no-local` 的干净 clone** 里逐条跑 README（`--version` / `config` / `selftest` /
+   `bench` / `bench --only` / `bench --out-dir` / 生成器 `--check` / 冒烟 38/38 全过）。
+   **未做**：ubuntu / Python 3.8 的干净 clone 实跑（本地 3.8 跑的是同一份工作区，不是干净 clone）。
 2. **`bench` 全矩阵约 20s**：冒烟只跑 `--only` 子集，全量在测试与独立步骤里跑。
 3. **跨平台逐字节一致没有实跑**：`last_run.json` 双跑一致只验同机同解释器。
+   **但已验到一条更强的**：干净 clone 里跑整矩阵，落盘的 `last_run.json` 与仓库里那份**逐字节相同**
+   （`git status` 干净）——"同一输入在任何一份检出里都得到同一产物"在本机成立。
 4. **`bench` 与 `detect` 共用退出码 1**：语义区分靠人读输出措辞与 README，没有第二套码（K1 四语义的约束）。
 
 **详细版在 [06-里程碑.md](06-里程碑.md) M5 节与 [07-交付对标与决策记录.md](07-交付对标与决策记录.md) §十一。**
