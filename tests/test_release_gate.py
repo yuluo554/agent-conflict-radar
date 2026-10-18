@@ -48,7 +48,7 @@ def test_gate_has_both_modes(gate):
     """离线与在线两套检查都必须存在，且**在线检查不以离线检查为子集**。"""
     offline_ids = [ident for ident, _t, _f in gate.OFFLINE_CHECKS]
     online_ids = [ident for ident, _t, _f in gate.ONLINE_CHECKS]
-    assert len(offline_ids) >= 10, "离线检查项过少（%d）" % len(offline_ids)
+    assert len(offline_ids) >= 11, "离线检查项过少（%d）" % len(offline_ids)
     assert len(online_ids) >= 6, "在线检查项过少（%d）" % len(online_ids)
     assert not set(offline_ids) & set(online_ids), "离线/在线检查编号重叠"
 
@@ -60,6 +60,17 @@ def test_online_checks_cover_the_four_required_facts(gate):
     assert "tag" in titles
     assert "job" in titles and "success" in titles
     assert "sha256" in titles
+
+
+def test_asset_reproducibility_is_a_gate_item(gate):
+    """C11：发布件必须**可复现**（同 ref 两次构建逐字节相同）。
+
+    本机实测踩中过：setuptools 的 sdist 带解包时刻的 mtime/uid 与 gzip 头时间，同一 ref 连跑
+    两次 sha256 不同——那会让"sha256 留档可复验"变成空话。修法是归档归一；本条钉住门里有它。
+    """
+    titles = dict((ident, title) for ident, title, _f in gate.OFFLINE_CHECKS)
+    assert "C11" in titles
+    assert "可复现" in titles["C11"]
 
 
 def test_attachment_identity_is_checked_against_the_tag_tree(gate):

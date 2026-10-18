@@ -9,8 +9,8 @@
 ## ✅ 当前状态：M6 已交付（2026-10-18），命令面 7/7，发布门离线 10 条 + 在线 6 条
 
 七条命令全部落地，合成冲突矩阵与意图矩阵已入仓可审计，`radar bench` 可**一键复跑评分**。
-`scripts/check_release.py` 是**发布终态自检门**（离线 C01–C10 / 在线 O01–O07，刻意不进 CI），
-它自己也做了 17 组变异验证（**检查项数 == 变异组数**）。
+`scripts/check_release.py` 是**发布终态自检门**（离线 C01–C11 / 在线 O01–O07，刻意不进 CI），
+它自己也做了 18 组变异验证（**检查项数 == 变异组数**）。
 
 | 命令 | 状态 | 计划里程碑 |
 |---|---|---|
@@ -294,7 +294,7 @@ CI：`.github/workflows/ci.yml`，四矩阵 `windows/ubuntu × Python 3.8/3.12`�
 ### 发布终态自检（`scripts/check_release.py`，**刻意不进 CI**）
 
 ```bash
-python scripts/check_release.py            # 离线 C01–C10：工作树/产物/名字四向/退出码/矩阵/脱敏/MANIFEST/真建 sdist/解包即用
+python scripts/check_release.py            # 离线 C01–C11：工作树/产物/名字四向/退出码/矩阵/脱敏/MANIFEST/真建 sdist/解包即用
 python scripts/check_release.py --online --tag v0.0.1   # 在线 O01–O07：公开/tag 指向/CI 逐 job/附件集合/逐个下载复算 sha256/附件与 tag 树同源
 python scripts/check_release.py --mutation # 门自身变异验证：检查项数 == 变异组数
 ```

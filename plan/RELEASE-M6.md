@@ -37,9 +37,9 @@ GitHub 仓库名 `agent-conflict-radar`；`pyproject.toml` 的 `name = "agent-co
 
 | 模式 | 判据 |
 |---|---|
-| 默认（离线） | C01–C10：工作树干净 / 无运行产物入库 / 名字四向 / 退出码冻结 / 矩阵自检 / 矩阵机器无关 / 提交面脱敏 / MANIFEST 覆盖 / **真建 sdist 核对** / **解包即用** |
+| 默认（离线） | C01–C11：工作树干净 / 无运行产物入库 / 名字四向 / 退出码冻结 / 矩阵自检 / 矩阵机器无关 / 提交面脱敏 / MANIFEST 覆盖 / **真建 sdist 核对** / **解包即用** |
 | `--online` | O01–O07：仓库公开 / annotated tag 指向发布提交 / CI **逐 job** 全 success / push 事件与 run 对账 / 附件集合与登记一致 / **逐个下载复算 sha256** / **附件与 tag 树逐字节同源** |
-| `--mutation` | 门自身的可证伪性：**检查项数 == 变异组数**（17 ↔ 17），每条检查必须被对应变异打红 |
+| `--mutation` | 门自身的可证伪性：**检查项数 == 变异组数**（18 ↔ 18），每条检查必须被对应变异打红 |
 
 退出码沿用 `radar` 的四语义：`0` 全过 / `1` 有 FAIL / `2` 用法错误 / `3` 依赖缺失（gh、build、git）。
 **不新增第五个码**（K1）。
@@ -118,7 +118,7 @@ GitHub 仓库名 `agent-conflict-radar`；`pyproject.toml` 的 `name = "agent-co
 | `python -m agent_conflict_radar.bench.gen --check` | 两层断言 + 提交 sha 复算全过，exit 0 |
 | `tools/verify_mutation.py` | 36 组变异全部被抓到（M5 口径） |
 | `scripts/check_release.py` | 离线 10 条无 FAIL |
-| `scripts/check_release.py --mutation` | 17 条检查 ↔ 17 条变异，逐条被打红 |
+| `scripts/check_release.py --mutation` | 18 条检查 ↔ 18 条变异，逐条被打红 |
 
 ---
 

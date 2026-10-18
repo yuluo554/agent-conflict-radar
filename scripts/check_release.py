@@ -263,6 +263,12 @@ class Context(object):
             self._sdist_cache = _build_sdist_members(self.root, self.tree_ref())
         return dict(self._sdist_cache)
 
+    def normalize_archive(self) -> Callable[[Path, Path], None]:
+        """归档归一函数（C11 的探针点：变异世界可以把它换成"原样拷贝"）。"""
+        if "normalize_archive" in self._hooks:
+            return self._hooks["normalize_archive"]
+        return _normalize_sdist_archive
+
     # ---- gh（仅 --online 用） ----
     def gh_json(self, api_path: str) -> Any:
         if "gh_json" in self._hooks:
@@ -629,6 +635,39 @@ def check_commit_surface_desensitized(ctx: Context) -> List[str]:
     return offenders[:10]
 
 
+def check_asset_build_is_deterministic(ctx: Context) -> List[str]:
+    """C11 发布件可复现：同一 ref 连续建两次，**逐字节相同**。
+
+    为什么要有这条：本机实测 setuptools 的 sdist **不是**逐字节可复现的（tar 成员带解包时刻的
+    `mtime` 与 `uid/gid`，gzip 头也带当前时间）——同一 tag 连跑两次 sha256 不同。
+    那会让"本地副本 + sha256 留档可复验"退化成"只有当时那一份对得上"。
+    `_normalize_sdist_archive` 是修法；本检查是**钉住修法**的那道门（否则下次有人恢复成
+    `shutil.copyfile` 也不会有任何东西变红）。
+    """
+    ref = ctx.tree_ref()
+    normalize = ctx.normalize_archive()
+    first_dir, first_name = _raw_sdist_archive(ctx.root, ref)
+    second_dir, second_name = _raw_sdist_archive(ctx.root, ref)
+    try:
+        work = Path(tempfile.mkdtemp(prefix="radar-rel-det-"))
+        try:
+            one = work / ("a-" + first_name)
+            two = work / ("b-" + second_name)
+            normalize(first_dir / first_name, one)
+            normalize(second_dir / second_name, two)
+            if _sha256(one) != _sha256(two):
+                return [
+                    "同一 ref 连续两次构建的归档不一致（sha256 不同）：发布件不可复现，"
+                    "sha256 留档无法复验。检查 `_normalize_sdist_archive` 是否仍在生效"
+                ]
+            return []
+        finally:
+            shutil.rmtree(str(work), ignore_errors=True)
+    finally:
+        shutil.rmtree(str(first_dir), ignore_errors=True)
+        shutil.rmtree(str(second_dir), ignore_errors=True)
+
+
 def check_manifest_coverage(ctx: Context) -> List[str]:
     """C08 MANIFEST.in 白名单覆盖 `bench/`（且无整目录兜底规则）。"""
     try:
@@ -958,6 +997,7 @@ OFFLINE_CHECKS: List[Tuple[str, str, Callable[[Context], List[str]]]] = [
     ("C08", "MANIFEST.in 覆盖 bench/ 且无兜底规则", check_manifest_coverage),
     ("C09", "真建 sdist 并逐条核对内容", check_sdist_contents),
     ("C10", "解包即用（从解包目录之外跑 CLI）", check_extracted_self_sufficient),
+    ("C11", "发布件可复现（同 ref 两次构建逐字节相同）", check_asset_build_is_deterministic),
 ]
 
 ONLINE_CHECKS: List[Tuple[str, str, Callable[[Context], List[str]]]] = [
@@ -1167,6 +1207,13 @@ def _mutation_worlds() -> List[Mutation]:
             tree_files=lambda: {"src/mod.py": b"GOOD = 1\n"},
         )
 
+    def c11() -> Context:
+        # 把归档归一换成"原样拷贝"：同 ref 两次构建必然不同（mtime / uid 变了），C11 必须红。
+        def passthrough(src, dst):
+            shutil.copyfile(str(src), str(dst))
+
+        return Context(REPO_ROOT, tree_ref=lambda: "HEAD", normalize_archive=lambda: passthrough)
+
     return [
         Mutation("R01", "C01", "工作树脏 → C01 必红", c01),
         Mutation("R02", "C02", "跟踪面含 out/ → C02 必红", c02),
@@ -1185,6 +1232,7 @@ def _mutation_worlds() -> List[Mutation]:
         Mutation("R15", "O05", "附件集合与登记不符 → O05 必红", o05),
         Mutation("R16", "O06", "下载内容与 sha256 不符 → O06 必红", o06),
         Mutation("R17", "O07", "附件内容与 tag 树不一致 → O07 必红", o07),
+        Mutation("R18", "C11", "归档归一被去掉（同 ref 两次构建不同）→ C11 必红", c11),
     ]
 
 
@@ -1269,6 +1317,111 @@ def run_mutation(verbose: bool = True) -> int:
     return EXIT_PASS
 
 
+def _normalize_sdist_archive(source: Path, target: Path) -> None:
+    """把 setuptools 产出的 sdist 归一成**确定性归档**（同一 tag 重跑 → 逐字节相同）。
+
+    为什么必须做：本机实测 setuptools 的 sdist **不是**逐字节可复现的——tar 成员带解包时刻的
+    `mtime`、属主 `uid/gid`，gzip 头也带当前时间。同一 tag 连跑两次得到两个 sha256，
+    "本地副本 + sha256 留档可复验"就退化成"只有那一次跑出来的那份对得上"。
+
+    归一口径（只改**打包元数据**，不改任何文件内容）：
+    * 成员 `mtime` = 固定纪元、`uid/gid` = 0、`uname/gname` = 空、去掉 `pax_global_header`；
+    * gzip 头 `mtime` = 固定纪元。
+    文件内容与成员顺序保持原样——所以 O07（与 tag 树逐字节同源）依然成立。
+    """
+    fixed = 0  # 结构化常量：归档纪元，不是策略阈值
+    with tarfile.open(str(source), "r:gz") as source_archive:
+        members = []
+        for member in source_archive.getmembers():
+            if member.name == "pax_global_header" or not (member.isfile() or member.isdir()):
+                continue
+            member.mtime = fixed
+            member.uid = member.gid = fixed
+            member.uname = member.gname = ""
+            member.mode = 0o755 if member.isdir() else 0o644
+            payload = source_archive.extractfile(member) if member.isfile() else None
+            members.append((member, payload.read() if payload is not None else None))
+    import gzip
+
+    with gzip.GzipFile(filename="", mode="wb", fileobj=open(str(target), "wb"), mtime=fixed) as gz:
+        with tarfile.open(fileobj=gz, mode="w", format=tarfile.GNU_FORMAT) as out:
+            for member, payload in members:
+                if payload is None:
+                    out.addfile(member)
+                else:
+                    import io
+
+                    out.addfile(member, io.BytesIO(payload))
+
+
+def _raw_sdist_archive(root: Path, ref: str) -> Tuple[Path, str]:
+    """从受控树建一份**原始** sdist，返回 `(临时目录, 归档文件名)`。
+
+    调用方负责清理返回的临时目录。抽成函数是为了让 `--build-asset` 与发布门 C11
+    （归档确定性）走**同一条构建路径**——"门验的和上传的不是同一条路"是这次要防的形态。
+    """
+    export_dir = tempfile.mkdtemp(prefix="radar-rel-asset-src-")
+    outdir = tempfile.mkdtemp(prefix="radar-rel-asset-out-")
+    try:
+        completed = subprocess.run(
+            ["git", "archive", "--format=tar", ref], cwd=str(root), stdout=subprocess.PIPE
+        )
+        if completed.returncode != EXIT_PASS:
+            raise EnvironmentMissing("git archive %s 失败" % ref)
+        archive_path = Path(export_dir) / "_tree.tar"
+        with open(str(archive_path), "wb") as handle:
+            handle.write(completed.stdout)
+        tree_dir = Path(export_dir) / "tree"
+        tree_dir.mkdir()
+        with tarfile.open(str(archive_path), "r:") as archive:
+            _extract_tar(archive, tree_dir)
+        code, out, err = _run(
+            [sys.executable, "-m", "build", "--sdist", "--outdir", outdir, str(tree_dir)], cwd=outdir
+        )
+        if code != EXIT_PASS:
+            raise EnvironmentMissing("构建 sdist 失败：%s" % ((err or out).strip().splitlines()[-1:]))
+        archives = sorted(Path(outdir).glob("*.tar.gz"))
+        if not archives:
+            raise EnvironmentMissing("构建声称成功但没有产出 .tar.gz")
+        return Path(outdir), archives[0].name
+    finally:
+        shutil.rmtree(export_dir, ignore_errors=True)
+
+
+def build_asset(dest_dir: Path, tag: str, root: Path) -> int:
+    """从 **tag 树** 建出要上传的源码包，落到 `dest_dir`（同名副本即上传件）。
+
+    为什么走这个模式而不是手敲 `python -m build`：上传件必须与发布门 C09/O07 验的是**同一条
+    构建路径**（`git archive <tag>` → 导出的受控树 → `build --sdist`）。手敲时若漏了导出一层，
+    工作树里的 `*.egg-info` 就会混进去，而门验的和你上传的就不是同一个东西。
+
+    幂等：归档经 `_normalize_sdist_archive` 归一（固定 mtime / uid / gid / uname / gzip 头时间），
+    同一 tag 重跑得到**同一组字节**，sha256 因此可复算。这是本机实测出来的要求——
+    未归一时同 tag 连跑两次 sha256 不同（发布门 C11 把这条钉住）。
+    """
+    dest_dir = Path(dest_dir)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    ref = "%s^{commit}" % tag if tag else "HEAD"
+    code, _out, err = _run(["git", "rev-parse", "--verify", ref], cwd=root)
+    if code != EXIT_PASS:
+        raise ReleaseNotAchieved("本地不存在 tag %r：%s" % (tag, err.strip()))
+    members = _build_sdist_members(root, ref)
+    outdir, name = _raw_sdist_archive(root, ref)
+    try:
+        produced = outdir / name
+        target = dest_dir / name
+        _normalize_sdist_archive(produced, target)
+        digest = _sha256(target)
+        print("已构建发布附件：%s" % target)
+        print("  sha256  %s" % digest)
+        print("  字节数  %d" % target.stat().st_size)
+        print("  来源    git archive %s → sdist（与发布门 C09/O07 同一条路径）" % ref)
+        print("  成员数  %d" % len(members))
+        return EXIT_PASS
+    finally:
+        shutil.rmtree(str(outdir), ignore_errors=True)
+
+
 def record_assets(local_dir: Path, tag: str, slug: str, root: Path) -> int:
     """把本地附件副本的 sha256 记进 `plan/release-assets.json`（K2 原子写）。
 
@@ -1310,8 +1463,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--online", action="store_true", help="额外检查远端发布状态（需要已登录的 gh）")
     parser.add_argument("--mutation", action="store_true", help="门自身变异验证（检查项数 == 变异组数）")
+    parser.add_argument("--build-asset", metavar="DIR", default=None, help="从 tag 树建出要上传的源码包并落到 DIR")
     parser.add_argument("--record-assets", metavar="DIR", default=None, help="把本地附件副本的 sha256 记进登记文件")
-    parser.add_argument("--tag", default="", help="发布 tag（--online / --record-assets 必填）")
+    parser.add_argument("--tag", default="", help="发布 tag（--online / --build-asset / --record-assets 必填）")
     parser.add_argument("--slug", default=CANONICAL_SLUG, help="仓库坐标（默认 %(default)s）")
     parser.add_argument("--root", default=str(REPO_ROOT), help="仓库根（默认本脚本所在仓库）")
     return parser
@@ -1324,6 +1478,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         pass
     args = build_parser().parse_args(sys.argv[1:] if argv is None else list(argv))
     root = Path(args.root)
+    if args.build_asset:
+        if not args.tag:
+            print("--build-asset 需要 --tag", file=sys.stderr)
+            return EXIT_USAGE_ERROR
+        try:
+            return build_asset(Path(args.build_asset), args.tag, root)
+        except ReleaseNotAchieved as exc:
+            print("发布未达成：%s" % exc, file=sys.stderr)
+            return EXIT_FAIL
+        except EnvironmentMissing as exc:
+            print("环境缺失：%s" % exc, file=sys.stderr)
+            return EXIT_MISSING_ENV
     if args.record_assets:
         if not args.tag:
             print("--record-assets 需要 --tag", file=sys.stderr)
