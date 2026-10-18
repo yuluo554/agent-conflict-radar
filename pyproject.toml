@@ -32,9 +32,11 @@ dependencies = []
 
 [project.optional-dependencies]
 # dev = 测试期依赖。README 快速开始与 CI 全部 job 使用同一 extras 集合（K14 对账门）。
-# `build` 是 M6 加的：`tests/test_release_gate.py` 要真建 sdist（与发布门 C09/C11 同一条路径）。
-# 它只在开发/发布期用，**不进** `dependencies`——运行时仍然零第三方依赖。
-dev = ["pytest>=7,<9", "build>=1,<2"]
+# `build` / `wheel` 是 M6 加的：`tests/test_release_gate.py` 要真建 sdist（与发布门 C09/C11
+# 同一条路径）。`wheel` 必须显式列——`build --no-isolation` 按**安装元数据**校验它，
+# 光靠 setuptools 内嵌的那份不算（本机实测）。
+# 它们只在开发/发布期用，**不进** `dependencies`——运行时仍然零第三方依赖。
+dev = ["pytest>=7,<9", "build>=1,<2", "wheel"]
 
 [project.scripts]
 radar = "agent_conflict_radar.cli:main"

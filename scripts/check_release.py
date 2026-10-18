@@ -1391,12 +1391,16 @@ def _build_sdist_argv(outdir: str, source_dir: Path) -> List[str]:
     否则退回默认隔离（那种情况下必然联网，属于环境问题而不是门的问题）。
     """
     argv = [sys.executable, "-m", "build", "--sdist", "--outdir", outdir]
+    # ⚠️ 不能用 `import wheel` 判断：setuptools 自带一个 `_vendor/wheel`，`import wheel` 会命中
+    # 它，而 `build` 认的是**安装元数据**里的 `wheel` 发行包（本机实测：import 成功、build 仍报
+    # `wheel: found: not installed`）。判据必须落在 importlib.metadata 上。
     try:
-        import setuptools  # noqa: F401
-        import wheel  # noqa: F401
+        import importlib.metadata as metadata
 
+        metadata.version("setuptools")
+        metadata.version("wheel")
         argv.append("--no-isolation")
-    except ImportError:
+    except Exception:
         pass
     argv.append(str(source_dir))
     return argv
