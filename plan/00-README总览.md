@@ -336,8 +336,10 @@
 **M6 新增的"等价"缺口（写清）**：
 
 1. **远端面全部未执行**：`--online` 的六条检查只经过变异验证（注入坏世界），**没有一次真实 gh 调用的成功记录**。
-2. **干净 venv / 干净 clone 沿用 M5 结论**：M6 未重跑；C10 的"解包即用"是解包 + `PYTHONPATH` 的模块通路，
-   不是独立安装。
+2. **干净 venv / 干净 clone 已重跑（本机 Windows / 3.12）**：`git clone --no-local` → 新 venv →
+   `pip install -e ".[dev]"` → `--version` / `selftest` / **整矩阵 `bench`（15/15、174 项）** /
+   生成器 `--check` / 冒烟 38/38 全过，跑完 `git status` 干净。**未做**：ubuntu / 3.8 的干净 clone；
+   C10 的"解包即用"是解包 + `PYTHONPATH` 的模块通路，不是独立安装。
 3. **跨平台逐字节一致仍未实测**（与 M5 同一边界）。
 4. **`check_push_runs_reconciled` 的"一 workflow"前提**未在双 workflow 情形下实测。
 
