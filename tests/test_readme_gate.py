@@ -53,6 +53,9 @@ FROZEN_STDLIB = frozenset(
         "inspect",
         "shutil",
         "tempfile",
+        # M6：Windows 8.3 短名的回归用例要调 `GetShortPathNameW` 造真实短名。
+        # `ctypes` 是标准库（Windows 侧提供 kernel32 绑定；POSIX 上那条分支不执行）。
+        "ctypes",
     }
 )
 

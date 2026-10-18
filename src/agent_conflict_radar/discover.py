@@ -487,7 +487,19 @@ def _time_bounds(timestamps: Sequence[datetime]) -> Tuple[Optional[str], Optiona
 
 
 def _norm(path: str) -> str:
-    return os.path.normcase(os.path.normpath(path))
+    """路径比较用的归一键：词法归一 + 解析 8.3 短名 + 大小写折叠。
+
+    ⚠️ **必须解析短名**（CI 的 windows leg 实测）：GitHub runner 的 `TEMP` 是 8.3 形态
+    （`C:/Users/RUNNER~1/AppData/Local/Temp/...`），而 `git worktree list` 报长名
+    （`C:/Users/runneradmin/...`）。只做 `normcase(normpath())` 时两者前缀对不上，
+    于是每个会话都被判成 `in_worktree=False` ——**整棵矩阵一个冲突都不产出**，
+    而 scan/intent 层看起来还"正常"（真的踩过）。
+
+    `realpath` 在 Windows 上会把短名展开为长名；POSIX 上是空操作（除符号链接外）。
+    只在**比较**时用：产物里的 `workspace` 仍是 git 原样报告的路径。
+    """
+    resolved = os.path.realpath(path)
+    return os.path.normcase(os.path.normpath(resolved))
 
 
 def resolve_root(raw: Optional[str], env_name: str, default_relative: str) -> Optional[Path]:

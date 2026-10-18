@@ -323,3 +323,47 @@ def test_match_worktree_longest_prefix_wins():
     assert (matched, inside) == ("C:/w/demo-radar-alpha", True)
     matched, inside = discover.match_worktree("C:/w/other", worktrees)
     assert (matched, inside) == ("C:/w/other", False)
+
+
+# --------------------------------------------------------------------------------------
+# 跨平台路径等价（M6：CI 首跑实测的两个缺陷）
+# --------------------------------------------------------------------------------------
+
+
+def test_norm_expands_windows_8_3_short_names(tmp_path):
+    """8.3 短名与长名必须归一成同一个键。
+
+    这是 **CI 首跑 windows leg 全红** 的根因：runner 的 `TEMP` 是
+    `C:/Users/RUNNER~1/AppData/Local/Temp/...`（8.3），而 `git worktree list` 报长名
+    `C:/Users/runneradmin/...`。只做 `normcase(normpath())` 时前缀对不上，于是
+    **每个会话都被判成 `in_worktree=False`，整棵矩阵一个冲突都不产出**——
+    而 scan/intent 层看起来还"正常"。
+
+    Windows 上本用例真的造一个 8.3 短名来验；POSIX 上 `realpath` 是空操作，
+    改成验"长短名解析在本平台至少不会把同一个真实目录判成两个"。
+    """
+    long_path = str(tmp_path.resolve())
+    short = None
+    if os.name == "nt":  # pragma: no cover - 仅在 Windows 上走这条
+        import ctypes
+
+        buffer = ctypes.create_unicode_buffer(512)
+        if ctypes.windll.kernel32.GetShortPathNameW(long_path, buffer, 512):
+            candidate = buffer.value
+            if candidate and candidate.upper() != long_path.upper() and "~" in candidate:
+                short = candidate
+    probe = short or long_path
+    assert discover._norm(probe) == discover._norm(long_path), (
+        "同一目录的长名与短名归一后必须相等（否则 worktree 匹配会把会话判成"
+        "“不在工作区”，detect 静默零产出）"
+    )
+
+
+def test_match_worktree_handles_short_name_cwd(tmp_path):
+    """会话 cwd 用短名、worktree 用长名时仍必须匹配上（CI 实测形态）。"""
+    long_path = str(tmp_path.resolve())
+    worktrees = [discover.Worktree(path=long_path, head="a", branch="main", is_main=True)]
+    matched, inside = discover.match_worktree(long_path, worktrees)
+    assert (matched, inside) == (long_path, True)
+    matched, inside = discover.match_worktree(long_path + os.sep + "src", worktrees)
+    assert inside is True

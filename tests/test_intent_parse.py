@@ -488,3 +488,28 @@ def test_precision_order_is_strongest_to_weakest():
     assert intent._worst_precision(["exact", "coarse"]) == "coarse"
     assert intent._worst_precision(["exact", "unknown"]) == "unknown"
     assert intent._worst_precision([]) == "exact", "没有反面证据就不降级"
+
+
+def test_clean_relative_is_platform_independent():
+    """同一个字符串在 Windows 与 POSIX 上必须给出同一个答案。
+
+    CI 首跑 ubuntu leg 实测：`_is_clean_relative("C:/abs/a.py")` 在 POSIX 上返回 True
+    ——`os.path.isabs` 不认盘符，于是"绝对路径"被判成"干净相对路径"，让两条 ubuntu leg 全红。
+
+    ⚠️ 本用例里的反斜杠一律用 `chr(92)` 拼：直接写字面量会把 `` / `` 当成转义
+    （本机实测踩中：断言报出的实际值是 `'src.py'`）。
+    """
+    bs = chr(92)
+    cases = [
+        ("src/a.py", True),
+        ("src/sub/a.py", True),
+        ("../a.py", False),
+        ("C:/abs/a.py", False),                  # 盘符式绝对路径：POSIX 上 os.path.isabs 认不出
+        ("c:" + bs + "abs" + bs + "a.py", False),  # 反斜杠形态
+        ("/abs/a.py", False),                    # POSIX 绝对路径
+        ("src" + bs + "a.py", False),            # 反斜杠一律拒绝（产物统一 posix 形态）
+        ("", False),
+        ("..", False),
+    ]
+    for rel, expected in cases:
+        assert intent._is_clean_relative(rel) is expected, "跨平台判定不一致：%r" % rel

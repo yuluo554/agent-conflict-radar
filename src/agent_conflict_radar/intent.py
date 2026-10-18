@@ -48,6 +48,7 @@ unknown 记录，故它 ≥ `unknown` 条目数）——K12"先声明计数口�
 """
 
 import os
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -295,9 +296,23 @@ def to_workspace_relative(raw: str, cwd: str) -> Tuple[str, bool]:
     return text.replace(os.sep, "/"), False
 
 
+#: 盘符式绝对路径（`C:/x`、`C:\x`）。**不能**用 `os.path.isabs` 判：POSIX 上它不认盘符，
+#: 于是 `C:/abs/a.py` 会被当成"干净的相对路径"（CI 的 ubuntu leg 实测踩中）。
+_DRIVE_ABSOLUTE_RE = re.compile(r"^[A-Za-z]:[\\/]")
+
+
 def _is_clean_relative(rel: str) -> bool:
-    """仓库相对路径必须干净（不得是绝对路径、不得用 `..` 逃出去、不得含反斜杠）。"""
+    """仓库相对路径必须干净（不得是绝对路径、不得用 `..` 逃出去、不得含反斜杠）。
+
+    ⚠️ 判据必须**跨平台一致**：同一个字符串在 Windows 与 POSIX 上要给出同一个答案。
+    首版只用了 `os.path.isabs`，于是 `C:/abs/a.py` 在 ubuntu 上被判成"干净"（CI 首跑实测）。
+    """
     if not rel or os.path.isabs(rel) or rel.startswith("..") or "\\" in rel:
+        return False
+    if _DRIVE_ABSOLUTE_RE.match(rel):
+        return False
+    if rel.startswith("/"):
+        # POSIX 绝对路径（Windows 上 `os.path.isabs("/x")` 已经为 True，这里是另一侧的兜底）。
         return False
     return True
 
