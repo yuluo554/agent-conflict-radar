@@ -288,3 +288,27 @@
 > 复跑命令：`py -X utf8 -m agent_conflict_radar.bench.gen --check`
 > （两层断言 + 冲突矩阵与意图矩阵的提交 sha 复算 + merge-tree exit 现场复核 + 意图矩阵的脏改动现场复核）。
 > 单条物化：`py -X utf8 -m agent_conflict_radar.bench.gen --materialize-intent intent_disk_wins --dest out/scene`。
+
+### 6.7 M3 三级检测的落盘形态与复核（M3 收尾，2026-10-18）
+
+**M3 没有引入任何新的数据源**：三级检测全部建立在已闭环的输入上（`git worktree list` / 双 harness 会话 /
+`git show HEAD:<path>` / `git diff -U0` 的既有结论 + `git merge-tree --write-tree`）。因此**本节不新增待核对项**，
+只登记 M3 对既有形态的**复核结论**与两条新增的解析形态。
+
+| 复核项 | 结论 | 复跑处 |
+|---|---|---|
+| R1 的 exit 0 / 1 / 128 三态 | ✅ 仍成立；七条冻结场景里 `whole_file_overwrite` 是唯一 exit 1，其余 exit 0 | `tests/test_bench_matrix.py::test_git_merge_expectations_match_a_real_merge_tree_run`（M1 起） |
+| `--write-tree` 的只读性 | ✅ 加固为**逐字节指纹**断言：跑完工作区文件 + `.git/index` + `.git/HEAD` 与跑前一致；HEAD 所在分支不变 | `tests/test_detect.py::test_detect_is_read_only_for_worktree_and_index` |
+| 对象库临时对象 | ✅ 如实披露：`--write-tree` 会写 `.git/objects`，**不入只读断言的比对面**，且在产物 `notes` 与 README 明写 | `tests/test_detect.py::test_readonly_boundary_is_disclosed_in_the_product` |
+
+**M3 新增的两条输出形态（实测，与 `gitio.parse_merge_tree_conflicts` 一一对应）**：
+
+1. **冲突路径的两条来源**：`100644 <sha> <stage>\t<path>` 三元组行（content 冲突）与
+   `CONFLICT (...): Merge conflict in <path>` 文案。**只认一条会漏**：`modify/delete` 形态**没有**三元组行，
+   路径只在 `CONFLICT (modify/delete): <path> ...` 文案里。
+2. **全部输出在 stdout 上**（本机 git `2.54.0.windows.1` 实测：`2>/dev/null` 后内容一条不少，`1>/dev/null` 后为空），
+   但 exit 128 的 `fatal:` 文案可能落在任一通道——解析只吃 stdout，诊断文案两者都取。
+
+**"两侧是否同一个仓库"的判据**：`git rev-parse --git-common-dir`。同一仓库的多个 worktree 共享同一个
+common dir（试合并照样能跑、对象库共享），两个独立仓库则不同 → 落 `degraded`。实测：
+`tests/test_detect_parse.py::test_git_common_dir_is_shared_by_worktrees_and_distinct_across_repositories`。

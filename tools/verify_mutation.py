@@ -67,11 +67,11 @@ MUTATIONS: List[Mutation] = [
     Mutation(
         "M4",
         "src/agent_conflict_radar/stages.py",
-        'STAGE_NOT_READY = {\n    "detect": "M3",',
-        'STAGE_NOT_READY = {\n    "scan": "M1",\n    "detect": "M3",',
+        'STAGE_NOT_READY = {\n    "report": "M4",',
+        'STAGE_NOT_READY = {\n    "detect": "M3",\n    "report": "M4",',
         "tests/test_stage_guard.py::test_no_command_is_unclassified",
-        "把**已退役**的 scan 又塞回阶段未就绪表（幽灵语义复活）→ 阶段守卫必须变红。"
-        "锚点必须指向**仍在**未就绪表里的那条命令：M2 交付 `intent` 时旧锚点（`\"intent\": \"M2\"`）"
+        "把**已退役**的 detect 又塞回阶段未就绪表（幽灵语义复活）→ 阶段守卫必须变红。"
+        "锚点必须指向**仍在**未就绪表里的那条命令：M3 交付 `detect` 时旧锚点（`\"detect\": \"M3\"`）"
         "当场漂移，变异脚本直接报「锚点未命中」——这正是三重断言该有的行为",
     ),
     Mutation(
@@ -235,6 +235,76 @@ MUTATIONS: List[Mutation] = [
         "tests/test_intent.py::test_scenario_parses_to_the_frozen_truth",
         "意图真值被手改（命中次数脱离几何）→ 逐场景对账 + 生成器 --check 必须变红："
         "这条同时打「真值禁手补」与「重生成逐字节」两层",
+    ),
+    Mutation(
+        "M23",
+        "src/agent_conflict_radar/detect.py",
+        "    shared = [name for name in touching_left if name in touching_right]\n"
+        "    if shared:\n"
+        "        return SYMBOL_HIT_SAME, tuple(_minimal_symbols(shared, spans))",
+        "    shared = [name for name in touching_left if name in touching_right]\n"
+        "    if False:  # 变异：同一符号永不命中（符号级能力形同虚设）\n"
+        "        return SYMBOL_HIT_SAME, tuple(_minimal_symbols(shared, spans))",
+        "tests/test_detect.py::test_scenario_detects_to_the_frozen_truth",
+        "符号级「同一符号」判据被打掉 → 冻结矩阵的逐场景精确匹配必须变红"
+        "（场景 2 / 3 / 6a 的 levels/symbols 期望值当场对不上）",
+    ),
+    Mutation(
+        "M24",
+        "src/agent_conflict_radar/detect.py",
+        "    return bool(left.derived_from) and left.derived_from == right.derived_from",
+        "    return False  # 变异：不再按 derived_from 去重",
+        "tests/test_detect.py::test_subagent_siblings_are_deduplicated_by_derived_from",
+        "subagent 去重被关掉（把「自己和自己」报成跨 agent 冲突）→ 场景 4 的对账必须变红",
+    ),
+    Mutation(
+        "M25",
+        "src/agent_conflict_radar/detect.py",
+        "    if result.returncode == _MERGE_TREE_ENVIRONMENT:\n        return False, True, [",
+        "    if False:  # 变异：exit 128 当成「无冲突」\n        return False, True, [",
+        "tests/test_detect_parse.py::test_unrelated_histories_exit_128_is_degraded_not_no_conflict",
+        "无共同祖先（exit 128）不再降级 → 「不得读成无冲突」这条断言必须变红。"
+        "⚠️ 本组首版**未检出**：只打掉 exit 128 分支时，下游那条「未预期的退出码」兜底分支照样降级，"
+        "目标守门仍绿——变异脚本当场报了出来。处置不是给兜底开例外，而是把断言收紧到"
+        "点名的具体原因（`exit 128` + `无共同祖先`），让两条通路可区分。",
+    ),
+    Mutation(
+        "M26",
+        "src/agent_conflict_radar/detect.py",
+        "        return not self.approximate",
+        "        return True  # 变异：取不到符号能力也照报符号字段（R4 未闭环却宣称符号级）",
+        "tests/test_detect_parse.py::test_non_python_conflict_is_approximate_and_carries_no_symbol_key",
+        "非 Python / 无基线的记录也吐符号字段 → 「产物里不出现符号级字段」必须变红（R4）",
+    ),
+    Mutation(
+        "M27",
+        "src/agent_conflict_radar/gitio.py",
+        'MUTATING_FLAGS = frozenset({"-w", "--write", "--hard", "--force", "--prune", "--amend"})',
+        'MUTATING_FLAGS = frozenset({"-w", "--hard", "--force", "--prune", "--amend"})  # 变异：放行 --write',
+        "tests/test_detect_parse.py::test_mutating_git_subcommands_are_refused_before_a_process_starts",
+        "只读白名单被打开（`--write` 不再拦）→ 只读纪律断言必须变红（K4）",
+    ),
+    Mutation(
+        "M28",
+        "src/agent_conflict_radar/detect.py",
+        "    if range_gap(left, right) <= tolerance:",
+        "    if range_gap(left, right) < tolerance:  # 变异：相邻容差差一（6a 该命中却不命中）",
+        "tests/test_detect_parse.py::test_pair_symbol_hit_distinguishes_same_adjacent_and_far",
+        "相邻容差的 `<=` 语义改成 `<` → 6a（间距 == 容差）的命中判据必须变红",
+    ),
+    Mutation(
+        "M29",
+        "src/agent_conflict_radar/detect.py",
+        "    for item in conflicts:\n"
+        "        by_max_level[item.level] += 1\n"
+        "        for level in item.levels:\n"
+        "            by_level_membership[level] += 1",
+        "    for item in conflicts:\n"
+        "        for level in item.levels:\n"
+        "            by_max_level[level] += 1\n"
+        "            by_level_membership[level] += 1",
+        "tests/test_detect.py::test_membership_count_exceeds_entry_count_when_one_record_hits_two_levels",
+        "`by_max_level`（划分）被改成记成员数 → K12 的两栏口径必须变红",
     ),
 ]
 

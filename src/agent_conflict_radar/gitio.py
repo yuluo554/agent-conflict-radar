@@ -24,6 +24,19 @@ from typing import List, NamedTuple, Optional, Sequence
 
 from .errors import EnvironmentError_, ReadOnlyViolation
 
+#: `merge-tree --write-tree` 的输出形态（M3 实测，git 2.54.0.windows.1，见 `data/README.md` §6.1）：
+#: * exit 0 → stdout **只有一行** tree sha（自动合并成功，没有冲突块）；
+#: * exit 1 → 第一行 tree sha，随后是 `<mode> <sha> <stage>\t<path>` 三元组行与
+#:   `CONFLICT (...): Merge conflict in <path>` / `CONFLICT (modify/delete): <path> ...` 行；
+#: * exit 128 → 环境问题（无共同祖先 / 非 git 目录），只给 `fatal:` 文案。
+#: 路径既可能出现在三元组的 **tab 之后**，也可能出现在 `CONFLICT` 文案里——两条都收，
+#: 只认一条会漏（`modify/delete` 形态**没有**三元组行）。
+_MERGE_TREE_CONFLICT_PREFIX = "CONFLICT ("
+_MERGE_TREE_MERGE_CONFLICT_MARK = "Merge conflict in "
+_MERGE_TREE_STAGE_FIELD = "\t"
+#: 三元组的 stage 编号（1=base / 2=ours / 3=theirs），只出现这几个值。
+_MERGE_TREE_CONFLICT_STAGES = frozenset({"1", "2", "3"})
+
 #: 允许的首个参数（子命令）。
 READ_ONLY_SUBCOMMANDS = frozenset(
     {
@@ -149,3 +162,107 @@ def run_readonly(
         stdout=completed.stdout.decode("utf-8", errors="replace"),
         stderr=completed.stderr.decode("utf-8", errors="replace"),
     )
+
+
+# --------------------------------------------------------------------------------------
+# 无副作用试合并（M3 区块级；`plan/04` M3）
+# --------------------------------------------------------------------------------------
+
+#: 三元组行的字段数（`<mode> <sha> <stage>`）。
+_MERGE_TREE_TRIPLET_FIELDS = ("mode", "sha", "stage")
+
+
+class MergeTreeResult(NamedTuple):
+    """`git merge-tree --write-tree <base> <other>` 的解析结果。
+
+    `tree` 是 stdout 首行的 tree sha（exit 0/1 时有；128 时为空串）。
+    `conflict_paths` 是**有序去重**的冲突路径（既从三元组行取，也从 `CONFLICT` 文案取）。
+    `returncode` 原样保留：判据在调用方（detect），本层只做"跑 + 解析"。
+    """
+
+    base: str
+    other: str
+    returncode: int
+    tree: str
+    conflict_paths: tuple
+    stdout: str
+    stderr: str
+
+    def diagnostic(self) -> str:
+        """失败时给人看的片段（stdout 优先，128 的 `fatal:` 可能在任一通道上）。"""
+        text = self.stdout.strip() or self.stderr.strip()
+        return text.split("\n")[0].strip() if text else ""
+
+
+def parse_merge_tree_conflicts(stdout: str) -> List[str]:
+    """从 `merge-tree --write-tree` 的 stdout 里取冲突路径（有序去重）。
+
+    两条来源都要收（M3 实测）：
+    * `100644 <sha> 2\\t<path>` 三元组行的 **tab 之后**（content 冲突的形态）；
+    * `CONFLICT (modify/delete): <path> deleted in ...` 这类文案（**没有**三元组行）。
+
+    只收"确实冲突"的行：exit 0 时 stdout 只有一行 tree sha，两条来源都不会命中。
+    """
+    found: List[str] = []
+    for raw in stdout.replace("\r\n", "\n").split("\n"):
+        if not raw:
+            continue
+        candidate = None
+        if raw.startswith(_MERGE_TREE_CONFLICT_PREFIX):
+            if _MERGE_TREE_MERGE_CONFLICT_MARK in raw:
+                candidate = raw.split(_MERGE_TREE_MERGE_CONFLICT_MARK, 1)[1].strip()
+            else:
+                _head, _sep, tail = raw.partition("): ")
+                candidate = tail.split(" ")[0].strip().strip('"')
+        elif _MERGE_TREE_STAGE_FIELD in raw:
+            prefix, _sep, tail = raw.partition(_MERGE_TREE_STAGE_FIELD)
+            fields = prefix.split()
+            if len(fields) == len(_MERGE_TREE_TRIPLET_FIELDS) and fields[-1] in _MERGE_TREE_CONFLICT_STAGES:
+                candidate = tail.strip()
+        if candidate and candidate not in found:
+            found.append(candidate)
+    return found
+
+
+def merge_tree(
+    repo: str,
+    base: str,
+    other: str,
+    timeout: Optional[float] = None,
+) -> MergeTreeResult:
+    """只读试合并：`git merge-tree --write-tree <base> <other>`（K4）。
+
+    只读边界（**如实披露，不得声称"零任何写入"**）：`--write-tree` 会在**对象库**写入临时
+    tree/blob 对象；它**不改索引、不改工作区、不建分支**，也不动 HEAD。这条边界写进 README 与报告。
+
+    退出码 0 / 1 / 128 都是**正常返回**（判据在调用方）；只有"git 不可用"与"超时"会抛
+    `EnvironmentError_`——超时**绝不**降级成"无冲突"，由调用方决定降级形态。
+    """
+    result = run_readonly(["merge-tree", "--write-tree", base, other], cwd=repo, timeout=timeout)
+    lines = result.stdout.split("\n")
+    tree = lines[0].strip() if lines and lines[0].strip() else ""
+    return MergeTreeResult(
+        base=base,
+        other=other,
+        returncode=result.returncode,
+        tree=tree,
+        conflict_paths=tuple(parse_merge_tree_conflicts(result.stdout)),
+        stdout=result.stdout,
+        stderr=result.stderr,
+    )
+
+
+def git_common_dir(repo: str, timeout: Optional[float] = None) -> Optional[str]:
+    """返回 `git rev-parse --git-common-dir`（同一仓库的多个 worktree 共享同一个 common dir）。
+
+    用途：两个 workspace 可能是**同一个仓库的两个 worktree**——那时 `merge-tree` 在哪个
+    worktree 里跑都一样（对象库是共享的）。取不到就返回 `None`（调用方按"不可判定"降级）。
+    """
+    result = run_readonly(["rev-parse", "--git-common-dir"], cwd=repo, timeout=timeout)
+    if result.returncode != 0:
+        return None
+    text = result.stdout.strip()
+    if not text:
+        return None
+    absolute = text if os.path.isabs(text) else os.path.join(repo, text)
+    return os.path.normcase(os.path.normpath(absolute))

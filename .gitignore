@@ -62,6 +62,11 @@ reports/
 .tmp/
 *.bak
 
+# 运行产物：README 示例与生成器物化用的输出目录（`--out-dir out` / `--materialize <id> --dest out/scene`）
+# 里面装的是**临时合成仓库与会话日志**（真 git 仓库，含 `.git/objects`），不入仓；
+# 冻结的合成矩阵在 `bench/`（见下方白名单例外）。
+out/
+
 # 临时 worktree / 合成场景运行时目录（程序生成，不入仓）
 **/worktrees/
 **/_worktrees/

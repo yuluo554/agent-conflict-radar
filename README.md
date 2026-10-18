@@ -6,17 +6,17 @@
 
 ---
 
-## ⚠️ 当前状态：M2 已交付（2026-10-18）
+## ⚠️ 当前状态：M3 已交付（2026-10-18）
 
-**这不是一个完成品。** 骨架可安装、`scan` 与 `intent` 已交付、合成冲突矩阵与意图矩阵已入仓可审计；但**三级检测、报告与基准评分尚未落地**：
+**这不是一个完成品。** 骨架可安装，`scan` / `intent` / `detect` 已交付，合成冲突矩阵与意图矩阵已入仓可审计；但**报告与基准评分尚未落地**：
 
 | 命令 | 状态 | 计划里程碑 |
 |---|---|---|
 | `radar scan` | ✅ 已交付 | M1 |
 | `radar intent` | ✅ 已交付 | M2 |
+| `radar detect` | ✅ 已交付 | M3 |
 | `radar config` | ✅ 已交付 | M0 |
 | `radar selftest` | ✅ 已交付 | M0 |
-| `radar detect` | ⬜ 未交付（exit 4） | M3 |
 | `radar report` | ⬜ 未交付（exit 4） | M4 |
 | `radar bench` | ⬜ 未交付（exit 4） | M5 |
 
@@ -26,7 +26,9 @@
 
 **`radar intent` 的退出码语义**：同样**成功恒为 0**。落点三分法 `exact` / `coarse` / `unknown` 是**产物字段**而不是退出码——`coarse`（`replace_all` / 锚点多处命中）与 `unknown`（`MultiEdit` / `file_path` 缺失）是"我们没定位到精确区间"，不是"有冲突"。环境问题（非 git 仓库 / 会话源不存在）仍是 exit 3。
 
-进度与逐棒 DoD 见 [`plan/06-里程碑.md`](plan/06-里程碑.md)；下一棒交接见 [`plan/HANDOFF-M3.md`](plan/HANDOFF-M3.md)。
+**`radar detect` 的退出码语义**：**有冲突 → 1，无冲突 → 0**（这是本项目第一条真的会用 1 的命令，也是题面 §M4 的 `1 = 有冲突` 首次落地）。`undetermined` / `degraded` / `approximate` **不改变**这个判定——它们是"这条判不准"的显式标注，不是"有冲突"；但产物与报告里必须逐条列出来（"没底"绝不能读成"没问题"）。环境问题（非 git 仓库 / 会话源不存在 / git 超时）仍是 exit 3。
+
+进度与逐棒 DoD 见 [`plan/06-里程碑.md`](plan/06-里程碑.md)；下一棒交接见 [`plan/HANDOFF-M4.md`](plan/HANDOFF-M4.md)。
 
 ---
 
@@ -60,7 +62,7 @@ radar bench --only same_symbol_diff_lines      # 只跑指定场景
 radar bench --bench-dir bench --out-dir out    # 显式指定矩阵目录与产物目录
 ```
 
-### 真实数据的只读演示（`scan` / `intent` 已交付；其余待 M3–M4）
+### 真实数据的只读演示（`scan` / `intent` / `detect` 已交付；报告待 M4）
 
 ```bash
 # 工作区与会话发现（会话根默认按常见位置探测；也可显式传）
@@ -76,14 +78,34 @@ radar scan --repo . --out-dir out --now 2026-01-01T10:00:00Z
 radar intent --repo . --claude-root <你的 Claude 会话根> --codex-root <你的 Codex 会话根>
 radar intent --repo . --out-dir out --now 2026-01-01T10:00:00Z
 
-# 三级检测 → 报告（M3 / M4 交付后）
-radar detect --repo .
+# 三级检测：文件级 → 区块级（无副作用试合并）→ 符号级；有冲突 exit 1、无冲突 exit 0
+radar detect --repo . --claude-root <你的 Claude 会话根> --codex-root <你的 Codex 会话根>
+radar detect --repo . --out-dir out
+
+# 报告（M4 交付后）
 radar report --repo . --out-dir out --format both
 ```
 
 `scan` 的输出（stdout，或 `--out-dir` 下的 `scan.json`）：工作区表、会话归集表（含 `derived_from` 去重）、活跃 cell 表、`undetermined` 独立分区与计数。**它不做任何冲突判定**——判定在 M3。
 
 `intent` 的输出（stdout，或 `--out-dir` 下的 `intent.json`）：每条 `(workspace, path)` 的 `sessions` / `last_write_ts` / `changed_ranges` / `precision` / `ranges_source` / `approximate` / `reasons` / `evidence`，逐会话的 `writes[]`（谁改了哪一段），以及 `undetermined` 与计数。**它也不做冲突判定**——只把"谁正在改什么"整理成可对账的结构。
+
+`detect` 的输出（stdout，或 `--out-dir` 下的 `conflicts.json`）：每条**冲突记录 = 一个 `(workspace_a, workspace_b, path)` 组合**，字段 `levels` 是命中的粒度**集合**（`file` / `block` / `symbol`）、`level` 是其中最高的一档、`symbols` 是命中的符号限定名集合、`line_ranges` 是见证对两侧的改动区间、`severity` 按 `[severity]` 权重打分，另有 `degraded` / `approximate` / `evidence` 与会话归属。
+
+### 三级判据与降级纪律（`detect`）
+
+| 粒度 | 判据 |
+|---|---|
+| **文件级** | 同一 `path` 出现在两个**不同且活跃**的 `(workspace, session)` 组里（活跃 = M1 的 `active_cells`） |
+| **区块级** | 两侧所在分支做 `git merge-tree --write-tree`（只读），冲突路径里含本 `path` |
+| **符号级** | `ast` 取 `HEAD` 版本里函数/类/方法的限定名与行区间（含嵌套 `A.B.f`），两侧改动落在**同一符号**、或落在**相邻符号**（间距 ≤ `symbol.adjacent_tolerance`） |
+
+四条纪律（都写进了测试）：
+
+* **同符号 / 相邻都算命中，"同文件不同符号"不升格**：`threshold_exact`（间距 == 容差，命中）与 `threshold_near_miss`（间距 == 容差 + 1，不命中）**成对**卡在阈值两侧；符号按**限定名**匹配，同名不同作用域不同键。
+* **subagent 去重**：两侧 `derived_from` 相同（同一 parent 派生的 subagent）→ **默认不产出该对**，产物里登记 `derived_sibling_pairs_skipped`（"有痕迹"而不是悄悄消失）。
+* **判不出来就说判不出来**：`merge-tree` 无共同祖先（exit 128）/ 会话没有 `gitBranch` / 两侧不在同一仓库 / 试合并超时 / 配置里关闭了试合并 → 该条 `degraded=true` + `undetermined(degraded)`，粒度降为文件级。`ast` 失败 / 取不到 `HEAD` 版本 / 两侧跨工作区（行号不可比）→ `approximate=true` + `undetermined(symbol_unavailable)`，且该条**不出现符号级字段**（R4 口径：那是"我们没做"，不是"没有符号命中"）。**任何情况下都不把"没底"写成"无冲突"。**
+* **计数两栏**：`counts.by_max_level` 是**条目数按最高粒度的集合划分**（`sum == len(conflicts)`），`counts.by_level_membership` 是**各粒度的成员数**（一条记录可同时命中多级，故可大于条目数）；`undetermined` 独立分区、不计入冲突。真值按 `levels` / `symbols` **集合精确匹配**（多报、漏报均失败）。
 
 ### 意图落点三分法（`exact` / `coarse` / `unknown`）
 
@@ -112,7 +134,9 @@ radar report --repo . --out-dir out --format both
 | **符号级** | Python `ast` 取函数/类/方法的限定名与行区间，两侧改动落在**同一或相邻符号** | 符号限定名 + 重叠/相邻行区间 |
 | **会话/工作区级** | 归集"活跃 agent × 工作区 × 时间窗"表，subagent 标 `derived_from` 去重 | 会话文件 + 源行号 |
 
-**只读边界**：`--write-tree` 会在对象库写入临时 tree/blob 对象（**不改索引、不改工作区、不建分支**）。本工具**绝不**执行 merge/rebase、绝不写 git 索引、绝不修改你的代码。
+**只读边界**：`--write-tree` 会在对象库写入临时 tree/blob 对象（**不改索引、不改工作区、不建分支、不动 HEAD**）。本工具**绝不**执行 merge/rebase、绝不写 git 索引、绝不修改你的代码。`tests/test_detect.py::test_detect_is_read_only_for_worktree_and_index` 在跑前跑后核对工作区/索引/HEAD 指纹。
+
+`radar detect` 的严重度按 `[severity]` 权重选档（**只引用键名，数值只在 `config/radar.toml`**）：同一符号被两侧修改 > 同文件不同符号 > 行区间相邻 > 仅文件级同改。
 
 ---
 
@@ -153,10 +177,11 @@ radar report --repo . --out-dir out --format both
 | `1` | 有冲突 |
 | `2` | 用法错误（未知子命令 / 缺必填参数 / 未知 `--format` / 路径不存在） |
 | `3` | 依赖或环境缺失（git 不可用 / 配置缺失或不可解析 / 会话源不存在 / `--repo` 不在 git 仓库内） |
-| `4` | 阶段未就绪（**骨架期专用**，随模块落地逐项退役；`scan` 已于 M1 退役、`intent` 已于 M2 退役） |
+| `4` | 阶段未就绪（**骨架期专用**，随模块落地逐项退役；`scan` 已于 M1 退役、`intent` 已于 M2 退役、`detect` 已于 M3 退役） |
 
-> 退出码非 0 **不一定**是跑挂：`detect` 对存在冲突的仓库返回 `1` 是**既定语义**，不是故障；
-> `scan` / `intent` 采到 `undetermined` / `coarse` / `unknown` 仍是 `0`（见上文"当前状态"）。
+> 退出码非 0 **不一定**是跑挂：`detect` 对存在冲突的仓库返回 `1` 是**既定语义**（M3 起真正启用），不是故障；
+> `scan` / `intent` 采到 `undetermined` / `coarse` / `unknown` 仍是 `0`；`detect` 采到
+> `undetermined` / `degraded` / `approximate` 也**不改**退出码——只在产物里逐条列出（见上文"当前状态"）。
 
 ---
 
@@ -189,8 +214,9 @@ radar report --repo . --out-dir out --format both
 | `radar bench` | 合成冲突矩阵 + 植入真值对账 | M5 |
 | `radar config` | 打印生效配置 | M0 |
 | `radar selftest` | 自检 | M0 |
+全局选项写在子命令**之前**：`radar --config path config`。
 
-全局选项写在子命令**之前**：`radar --config path config`。---
+---
 
 ## 诚实披露（三项风险，如实写，不粉饰）
 
@@ -207,7 +233,7 @@ radar report --repo . --out-dir out --format both
 * **纯本地、零上传、零遥测、不联网**：无网络调用路径（CI 侧有导入面审计）。
 * 会话日志含 prompt 与代码 → 检测链路**只抽结构化字段**（工作目录 / 分支 / 时间戳 / 文件路径 / 改动片段），**不落 prompt 正文**；证据只记 `文件:行号`。
 * **真实日志、真实路径清单、真实 session id 一律不入仓**；公开仓库只含合成场景（白名单：假项目名 `demo-radar-alpha`/`demo-radar-beta`、假 session id `sess-radar-NNNN`、假用户名 `radar-user`、固定基准时间 `2026-01-01T00:00:00Z`）。
-* 输出只写你指定的 `--out-dir`（默认当前目录），只写 `report.md` / `conflicts.json`。
+* 输出只写你指定的 `--out-dir`（默认不落盘，只打 stdout）：`scan.json` / `intent.json` / `conflicts.json`（M4 报告落地后另加 `report.md`）。**不给 `--out-dir` 时零写盘**（有测试断言 CWD 里一个文件都不落）。
 
 **判定为辅助参考，处置由你决定**：本工具不合并、不解决冲突、不接管编排。
 

@@ -23,6 +23,7 @@ from typing import List, Optional, Sequence
 
 from . import __version__
 from . import config as config_module
+from . import detect as detect_module
 from . import discover
 from . import gitio
 from . import intent as intent_module
@@ -31,6 +32,7 @@ from . import stages
 from .errors import ConfigError, RadarError, UsageError
 from .exit_codes import (
     EXIT_CODE_LABELS,
+    EXIT_CONFLICTS_FOUND,
     EXIT_ENVIRONMENT,
     EXIT_NOT_READY,
     EXIT_OK,
@@ -212,6 +214,8 @@ def _dispatch(args) -> int:
         return _cmd_scan(cfg, args)
     if command == "intent":
         return _cmd_intent(cfg, args)
+    if command == "detect":
+        return _cmd_detect(cfg, args)
     raise UsageError("未知命令：%r" % command)  # pragma: no cover - 由 parser 兜住
 
 
@@ -262,6 +266,30 @@ def _cmd_intent(cfg, args) -> int:
         serialize.write_atomic(target_dir / "intent.json", text)
     sys.stdout.write(text)
     return EXIT_OK
+
+
+def _cmd_detect(cfg, args) -> int:
+    """`radar detect`：M1 发现 + M2 意图 → 三级冲突记录 → `conflicts.json`。
+
+    退出码语义（与 README 一致，**这是第一条真的会用 1 的命令**）：
+    **有冲突 → 1，无冲突 → 0**。`undetermined` / `degraded` / `approximate` **不改变**这个判定
+    ——它们是"这条判不准"的显式标注，不是"有冲突"；但报告与产物里必须逐条列出来
+    （"没底"绝不能读成"没问题"）。真正的环境问题（非 git 仓库 / 会话源不存在 / git 超时）走 exit 3。
+    """
+    result = detect_module.build_conflict_set(
+        args.repo_resolved,
+        getattr(args, "claude_root", None),
+        getattr(args, "codex_root", None),
+        cfg,
+        now=getattr(args, "now", None),
+    )
+    text = serialize.dumps_json(result.as_dict())
+    out_dir = getattr(args, "out_dir", None)
+    if out_dir:
+        target_dir = _resolve_out_dir(out_dir)
+        serialize.write_atomic(target_dir / "conflicts.json", text)
+    sys.stdout.write(text)
+    return EXIT_CONFLICTS_FOUND if result.conflicts else EXIT_OK
 
 
 def _resolve_out_dir(raw: str):

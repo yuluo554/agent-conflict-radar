@@ -40,6 +40,7 @@ if SRC_ROOT not in sys.path:
 from agent_conflict_radar import stages  # noqa: E402  (需要先把 src 放上 sys.path)
 from agent_conflict_radar.cli import _ensure_utf8_stdio, build_parser  # noqa: E402
 from agent_conflict_radar.exit_codes import (  # noqa: E402
+    EXIT_CONFLICTS_FOUND,
     EXIT_ENVIRONMENT,
     EXIT_NOT_READY,
     EXIT_OK,
@@ -147,6 +148,7 @@ def _module_argv(*args: str) -> List[str]:
 #: 夹具缓存：`build_cases` 与 `console_script_cases` 共用同一份（否则会重复物化并互相删目录）。
 _SCAN_FIXTURES: dict = {}
 _INTENT_FIXTURES: dict = {}
+_DETECT_FIXTURES: dict = {}
 
 
 def _scan_fixture(scratch: str) -> Tuple[str, str, str]:
@@ -194,6 +196,29 @@ def _intent_fixture(scratch: str) -> Tuple[str, str, str]:
     return _INTENT_FIXTURES[scratch]
 
 
+def _detect_fixture(scratch: str) -> Tuple[str, str, str]:
+    """造一份 `detect` 的合成夹具（M3）：真 git 仓库（两条已提交分支）+ 会话根。
+
+    选 `whole_file_overwrite`：它是矩阵里**唯一**让 `git merge-tree` 真的报冲突（exit 1）的场景，
+    三粒度齐全（file / block / symbol），因此冒烟顺带验到"区块级真的跑了"与"退出码 1 真的会用"。
+    """
+    import agent_conflict_radar.bench.gen as bench_gen
+
+    if scratch in _DETECT_FIXTURES:
+        return _DETECT_FIXTURES[scratch]
+    scenario = bench_gen.scenario_by_id("whole_file_overwrite")
+    dest = os.path.join(scratch, "detect-fixture")
+    bench_gen.materialize_scenario(scenario, dest)
+    claude = os.path.join(dest, "sessions", "claude")
+    codex = os.path.join(dest, "sessions", "codex")
+    if not os.path.isdir(codex):
+        # 场景里没有该源时传一个**空目录**（缺省探测会落到真实用户日志上，见 plan/05 §七）。
+        codex = os.path.join(scratch, "detect-empty-codex")
+        os.makedirs(codex, exist_ok=True)
+    _DETECT_FIXTURES[scratch] = (os.path.join(dest, "repo"), claude, codex)
+    return _DETECT_FIXTURES[scratch]
+
+
 def _scan_argv(fixture, *prefix):
     repo, claude_root, codex_root = fixture
     return list(prefix) + [
@@ -208,6 +233,16 @@ def _intent_argv(fixture, *prefix):
     repo, claude_root, codex_root = fixture
     return list(prefix) + [
         "intent", "--repo", repo,
+        "--claude-root", claude_root,
+        "--codex-root", codex_root,
+        "--now", "2026-01-01T00:10:00Z",
+    ]
+
+
+def _detect_argv(fixture, *prefix):
+    repo, claude_root, codex_root = fixture
+    return list(prefix) + [
+        "detect", "--repo", repo,
         "--claude-root", claude_root,
         "--codex-root", codex_root,
         "--now", "2026-01-01T00:10:00Z",
@@ -280,6 +315,31 @@ def build_cases(repo_dir: str) -> List[Case]:
         )
     )
 
+    # ---- 已交付：detect（M3；合成夹具**真的有冲突**，区块级真跑 merge-tree）----
+    detect_fixture = _detect_fixture(repo_dir)
+    cases.append(
+        Case(
+            "module:detect(合成夹具)",
+            _detect_argv(detect_fixture, *_module_argv()),
+            EXIT_CONFLICTS_FOUND,
+            cwd=repo_dir,
+            command="detect",
+            note="有冲突 → exit 1（第一条真的会用 1 的命令）；夹具选 whole_file_overwrite（三粒度齐全）",
+        )
+    )
+    cases.append(
+        Case(
+            "env:detect 会话源缺失",
+            _module_argv("detect", "--repo", detect_fixture[0],
+                         "--claude-root", os.path.join(repo_dir, "no-such-root"),
+                         "--codex-root", detect_fixture[2], "--now", "2026-01-01T00:10:00Z"),
+            EXIT_ENVIRONMENT,
+            cwd=repo_dir,
+            command="detect",
+            note="显式指定的会话根不存在 → exit 3，不得退化成 exit 0 空结果",
+        )
+    )
+
     # ---- 阶段未就绪命令（当前契约：exit 4）----
     for command in sorted(stages.STAGE_NOT_READY):
         argv = _module_argv(command) + _repo_flag_if_supported(command, repo_dir)
@@ -298,7 +358,7 @@ def build_cases(repo_dir: str) -> List[Case]:
     cases.append(
         Case("usage:未知子命令", _module_argv("definitely-not-a-command"), EXIT_USAGE, cwd=repo_dir, command="--none--")
     )
-    for command in ("scan", "intent", "report"):
+    for command in ("scan", "intent", "detect", "report"):
         cases.append(
             Case(
                 "usage:%s 未知旗标" % command,
@@ -356,6 +416,7 @@ def console_script_cases(repo_dir: str) -> List[Case]:
     """裸 console script 通路（`radar …`）。只在已安装时有意义。"""
     fixture = _scan_fixture(repo_dir)
     intent_fixture = _intent_fixture(repo_dir)
+    detect_fixture = _detect_fixture(repo_dir)
     cases = [
         Case("console:--version", ["radar", "--version"], EXIT_OK, cwd=repo_dir, command="--version"),
         Case("console:config", ["radar", "config"], EXIT_OK, cwd=repo_dir, command="config"),
@@ -367,6 +428,13 @@ def console_script_cases(repo_dir: str) -> List[Case]:
             EXIT_OK,
             cwd=repo_dir,
             command="intent",
+        ),
+        Case(
+            "console:detect(合成夹具)",
+            _detect_argv(detect_fixture, "radar"),
+            EXIT_CONFLICTS_FOUND,
+            cwd=repo_dir,
+            command="detect",
         ),
     ]
     for command in sorted(stages.STAGE_NOT_READY):
