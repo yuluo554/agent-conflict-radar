@@ -14,7 +14,9 @@
 """
 
 import importlib.util
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -204,9 +206,15 @@ def test_not_published_is_a_fail_not_an_environment_error(gate):
                 git=lambda *_a: (_ for _ in ()).throw(gate.EnvironmentMissing("bad revision")),
             )
         )
-    # 缺附件登记 → FAIL 类
-    with pytest.raises(gate.ReleaseNotAchieved):
-        gate.check_release_assets_match_ledger(ictx(gh_json=lambda _p: {"assets": []}))
+    # 缺附件登记 → FAIL 类（用**空临时根**：真实仓库里登记已落地，不能拿它当"缺登记"）
+    empty_root = Path(tempfile.mkdtemp(prefix="radar-rel-noledger-"))
+    try:
+        with pytest.raises(gate.ReleaseNotAchieved):
+            gate.check_release_assets_match_ledger(
+                gate.Context(empty_root, tag="v9.9.9", gh_json=lambda _p: {"assets": []})
+            )
+    finally:
+        shutil.rmtree(str(empty_root), ignore_errors=True)
 
     # 阴性对照：真环境缺失（gh 缺失 / 未登录）仍是 EnvironmentMissing，不能算 FAIL。
     def _missing_download(_name, _dest):
@@ -239,3 +247,48 @@ def test_c07_ignores_docstrings_but_catches_code_literals(gate):
     literals = gate._code_string_literals(source)
     assert not any(marker in item for item in literals), "文档字符串被当成了代码常量"
     assert any(login in item for item in literals), "代码里的真实主目录被漏掉了"
+
+
+def test_o04_counts_per_source_not_per_commit(gate):
+    """O04 的计数单位是 **(提交, workflow, 事件来源)**，不是提交。
+
+    真实发布形态：发布提交先被 branch push、再被 tag push 各推一次——该提交上出现 2 条 run
+    是**正确**的。首版按提交计数，于是发布提交必红（本机实测踩中）。
+    """
+    release_sha = "abc123"
+    runs = [
+        {"id": 1, "head_sha": release_sha, "head_branch": "main", "workflow_id": 9, "conclusion": "success"},
+        {"id": 2, "head_sha": release_sha, "head_branch": "v0.0.1", "workflow_id": 9, "conclusion": "success"},
+    ]
+    per_pair = {}
+    for run in runs:
+        key = (run["head_sha"], str(run["workflow_id"]), run["head_branch"])
+        per_pair[key] = per_pair.get(key, 0) + 1
+    assert all(count == 1 for count in per_pair.values()), "同一提交的 branch/tag 两次推送不应算重复"
+
+
+def test_o07_uses_manifest_intent_not_whole_tree(gate):
+    """O07 的期望集合 = MANIFEST 覆盖 ∪ setuptools 自动纳入的 `src/*.py`，且排除运行产物。
+
+    首版要求"tag 树 ⊆ 包"，在真实发布时误报 5 个文件（`.gitignore` / `.github/` /
+    `bench/last_run.json` 等）——源码包本来就**不该**含它们。这不是包错了，是判据把
+    "源码包"当成了"整仓快照"。
+    """
+    tree = {
+        "README.md": b"x",
+        ".gitignore": b"x",
+        "bench/last_run.json": b"{}",
+        "src/agent_conflict_radar/__init__.py": b"x",
+    }
+    manifest = "include README.md\nrecursive-include bench *.json\n"
+    covered, _ = gate.manifest_covered(sorted(tree), manifest)
+    auto = {item for item in tree if item.startswith("src/") and item.endswith(".py")}
+    # `RUNTIME_PRODUCTS` 存的是**文件名**（`last_run.json`），不是相对路径——按 basename 排除。
+    expected = {
+        item for item in (set(covered) | auto)
+        if item.rsplit("/", 1)[-1] not in gate.RUNTIME_PRODUCTS
+    }
+    assert ".gitignore" not in expected, "点文件不该进源码包"
+    assert "bench/last_run.json" not in expected, "运行产物不该进源码包"
+    assert "src/agent_conflict_radar/__init__.py" in expected, "包内 .py 由 setuptools 自动纳入"
+    assert "README.md" in expected

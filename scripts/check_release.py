@@ -889,11 +889,17 @@ def check_ci_jobs_green(ctx: Context) -> List[str]:
 
 
 def check_push_runs_reconciled(ctx: Context) -> List[str]:
-    """O04 push 事件 ↔ run 对账：tag push 与 branch push 各一条 run，且都绿。
+    """O04 push 事件 ↔ run 对账：**每次推送恰好一条 run**；tag push 与发布提交的 branch push 都绿。
 
-    "push 事件数 = run 数"的落法：按 `head_sha` 归并 push 事件产生的 run，要求
-    **每个被推送的提交在每个 workflow 上恰有一条 run**（本仓只有一个 workflow）——
-    多出来的重复 run 说明有重跑未收口，缺失说明"CI 绿"这件事没有对应的那次推送。
+    ⚠️ 判据必须区分「当前状态」与「历史轮次」：本仓首推曾四腿全红（如实照录，不抹除）。
+    若要求"所有历史 run 都 success"，唯一的通过方式就是改写历史——那正是 DoD
+    「首跑失败照录不抹除」要防的事。所以：
+
+    * **每次推送**（按 `head_sha` 归并）的 run 数必须等于 workflow 数——缺一条说明
+      "CI 绿"这件事没有对应的那次推送，多一条说明有重跑未收口；
+    * **tag push** 的 run 必须全绿（发布口径）；
+    * **发布提交**（tag 指向的 commit）的 branch push run 必须全绿（与 O03 互证）；
+    * 其余更早提交上的失败轮次**只登记不判红**（`recorded` 列表，随输出打印）。
     """
     workflows = sorted((ctx.root / ".github" / "workflows").glob("*.yml"))
     if not workflows:
@@ -904,22 +910,61 @@ def check_push_runs_reconciled(ctx: Context) -> List[str]:
     if not runs:
         return ["没有任何 push 事件的 CI run"]
     failures: List[str] = []
-    default_branch = str(ctx.gh_json("repos/%s" % ctx.slug).get("default_branch", ""))
+    info = ctx.gh_json("repos/%s" % ctx.slug)
+    default_branch = str(info.get("default_branch", ""))
+    release_commit = _release_commit(ctx)
+
     tag_runs = [run for run in runs if run.get("head_branch") == ctx.tag]
-    branch_runs = [run for run in runs if run.get("head_branch") == default_branch]
-    for label, subset in (("tag push", tag_runs), ("branch push", branch_runs)):
-        if len(subset) != per_event:
-            failures.append("%s 的 run 数 %d ≠ workflow 数 %d" % (label, len(subset), per_event))
-        for run in subset:
-            if run.get("conclusion") != "success":
-                failures.append("%s 的 run %s 结论为 %r" % (label, run.get("id"), run.get("conclusion")))
-    counts: Dict[str, int] = {}
+    if len(tag_runs) != per_event:
+        failures.append("tag push 的 run 数 %d ≠ workflow 数 %d" % (len(tag_runs), per_event))
+    for run in tag_runs:
+        if run.get("conclusion") != "success":
+            failures.append("tag push 的 run %s 结论为 %r" % (run.get("id"), run.get("conclusion")))
+
+    release_branch_runs = [
+        run
+        for run in runs
+        if run.get("head_branch") == default_branch and str(run.get("head_sha", "")) == release_commit
+    ]
+    if len(release_branch_runs) != per_event:
+        failures.append(
+            "发布提交 %s 的 branch push run 数 %d ≠ workflow 数 %d"
+            % (release_commit[:12], len(release_branch_runs), per_event)
+        )
+    for run in release_branch_runs:
+        if run.get("conclusion") != "success":
+            failures.append("发布提交的 branch run %s 结论为 %r" % (run.get("id"), run.get("conclusion")))
+
+    # 每次推送 = 每个被推送提交**在每个 workflow 上**恰一条 run。
+    # ⚠️ 判据按 (提交, workflow) 计，而不是按提交计数：同一个提交可能被 **branch push 与
+    # tag push 各推一次**（本仓的发布提交就是这样），那时该提交有 2 条 run 是**正确**的。
+    # 首版按提交计数，于是发布提交必红（本机实测）。
+    # 判据按 **(提交, workflow, 事件来源)** 计：`head_branch` 区分 branch push 与 tag push。
+    # 发布提交同时被 branch push 与 tag push 各推一次，是**正确**的发布形态（本仓即如此）；
+    # 首版按提交计数，于是发布提交必红（本机实测）。真正要防的是"同一个来源重复触发"。
+    per_pair: Dict[Tuple[str, str, str], int] = {}
     for run in runs:
-        key = str(run.get("head_sha", ""))
-        counts[key] = counts.get(key, 0) + 1
-    for sha, count in sorted(counts.items()):
-        if count % per_event:
-            failures.append("提交 %s 的 push run 数 %d 不是 workflow 数 %d 的整数倍" % (sha, count, per_event))
+        key = (
+            str(run.get("head_sha", "")),
+            str(run.get("workflow_id", "")) or str(run.get("name", "")),
+            str(run.get("head_branch", "")),
+        )
+        per_pair[key] = per_pair.get(key, 0) + 1
+    for (sha, workflow, branch), count in sorted(per_pair.items()):
+        if count != 1:
+            failures.append(
+                "提交 %s 在 %r 上的 workflow %r 有 %d 条 push run（要求恰好 1 条）"
+                % (sha[:12], branch, workflow, count)
+            )
+
+    # 历史失败轮次：只登记，不判红（DoD：首跑失败照录不抹除）。
+    recorded = sorted(
+        (str(run.get("id")), str(run.get("head_sha", ""))[:12], str(run.get("conclusion")))
+        for run in runs
+        if run.get("conclusion") not in (None, "success")
+    )
+    if recorded and getattr(ctx, "verbose", False):
+        print("       历史失败轮次（照录，不判红）：%s" % recorded)
     return failures[:10]
 
 
@@ -928,17 +973,35 @@ _PACKAGE_METADATA = frozenset({"PKG-INFO", "setup.cfg"}) | GENERATED_EGG_INFO
 
 
 def check_attachment_matches_tag_tree(ctx: Context) -> List[str]:
-    """O07 本体一致性：Release 附件（下载复算过的那份）与 **tag 树**逐字节同源。
+    """O07 本体一致性：Release 附件与 **tag 树**逐字节同源。
 
     为什么单列一条：O05 只核对"名字 + 字节数"、O06 只核对"sha256 与登记一致"。两者都通过，
     仍然可能是"登记时就算错了"或"传的是另一个包"。这条把**远端的字节**与**tag 树的字节**
-    直接比：解包附件 → 逐个文件与 `git archive <tag>` 的内容比对（只放行打包器生成的元数据）。
+    直接比。
+
+    判据按 **MANIFEST.in 的白名单意图**取交集，而不是"tag 树里每个文件都必须在包里"：
+    源码包本来就**不该**含 `.gitignore` / `.gitattributes` / `.github/` 与运行产物
+    `bench/last_run.json`（后者在 MANIFEST 里显式 exclude）。首版把"tag 树 ⊆ 包"当成同源，
+    在真实发布时立刻误报 5 个文件（本机实测）——那不是包错了，是判据把"源码包"当成了"整仓快照"。
+
+    因此三层判据：
+    1. **被 MANIFEST 覆盖的 tag 树文件**必须全部在包里，且逐字节相同（这是"同源"的实质）；
+    2. 包里不得出现 MANIFEST 覆盖之外的内容（放行打包器生成的元数据）；
+    3. 运行产物不得出现在包里。
     """
     ledger = _ledger(ctx)
     entries = ledger.get("assets", [])
     if not entries:
         return ["附件登记为空：无可比对对象"]
     tree = ctx.tree_files()
+    manifest_text = ctx.read("MANIFEST.in")
+    covered, _broad = manifest_covered(sorted(tree), manifest_text)
+    # `src/` 下的包文件由 setuptools 的 `packages.find` **自动**纳入源码包，不需要（也不应该）
+    # 在 MANIFEST.in 里再列一遍——它们同样是"tag 树里该进包的内容"。
+    auto_packaged = {
+        item for item in tree if item.startswith("src/") and item.endswith(".py")
+    }
+    expected = (set(covered) | auto_packaged) - set(RUNTIME_PRODUCTS)
     work = Path(tempfile.mkdtemp(prefix="radar-rel-identity-"))
     failures: List[str] = []
     try:
@@ -959,15 +1022,22 @@ def check_attachment_matches_tag_tree(ctx: Context) -> List[str]:
             except tarfile.TarError as exc:
                 failures.append("附件 %r 不是可读的 tar 包：%s" % (name, exc))
                 continue
-            missing = sorted(set(tree) - set(members) - _PACKAGE_METADATA)
-            extra = sorted(set(members) - set(tree) - _PACKAGE_METADATA)
+            missing = sorted(expected - set(members))
+            extra = sorted(set(members) - expected - _PACKAGE_METADATA)
             if missing:
-                failures.append("附件 %r 缺 tag 树里的 %d 个文件：%s" % (name, len(missing), missing[:5]))
+                failures.append(
+                    "附件 %r 缺 MANIFEST 覆盖的 %d 个文件：%s" % (name, len(missing), missing[:5])
+                )
             if extra:
-                failures.append("附件 %r 有 tag 树没有的 %d 个文件：%s" % (name, len(extra), extra[:5]))
-            differing = sorted(
-                rel for rel in set(tree) & set(members) if tree[rel] != members[rel]
+                failures.append(
+                    "附件 %r 有 MANIFEST 未覆盖的 %d 个文件：%s" % (name, len(extra), extra[:5])
+                )
+            runtime_leaks = sorted(
+                rel for rel in members if rel.rsplit("/", 1)[-1] in RUNTIME_PRODUCTS
             )
+            if runtime_leaks:
+                failures.append("附件 %r 含运行产物：%s" % (name, runtime_leaks))
+            differing = sorted(rel for rel in expected & set(members) if tree.get(rel) != members[rel])
             if differing:
                 failures.append(
                     "附件 %r 与 tag 树内容不一致（%d 个文件）：%s"
@@ -1260,6 +1330,9 @@ def _mutation_worlds() -> List[Mutation]:
             root,
             tag="v0.0.1",
             download_asset=download,
+            # O07 现在按 MANIFEST 覆盖取期望集合，因此变异世界也要给一份 MANIFEST；
+            # 否则它会在读 MANIFEST 时抛 FileNotFoundError（被误报成"变异世界异常"）。
+            read=lambda rel: "recursive-include src *.py\n" if rel == "MANIFEST.in" else "",
             tree_files=lambda: {"src/mod.py": b"GOOD = 1\n"},
         )
 
