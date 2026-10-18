@@ -129,6 +129,18 @@ class EnvironmentMissing(Exception):
     """依赖/环境缺失（gh / build / git 不可用）→ 退出码 3，**不算 FAIL**。"""
 
 
+class ReleaseNotAchieved(Exception):
+    """发布未达成（本地没有 tag / 远端对象 404）→ 计 **FAIL**（exit 1）。
+
+    与 `EnvironmentMissing` 的区别是发布门最该守住的一条：**"还没发布"不是"工具没装"**。
+    混成一类会让"仓库根本没建"看起来像"这台机器没登录 gh"。
+    """
+
+
+class GhNotFound(ReleaseNotAchieved):
+    """远端对象不存在（仓库 / tag / Release 404）。"""
+
+
 def _run(argv: Sequence[str], cwd: Optional[Path] = None) -> Tuple[int, str, str]:
     """跑子进程，显式 utf-8 解码（K8：不依赖控制台码页）。"""
     completed = subprocess.run(
@@ -224,7 +236,11 @@ class Context(object):
             raise EnvironmentMissing("找不到 gh CLI：--online 需要 GitHub CLI 且已登录")
         code, out, err = _run(["gh", "api", api_path], cwd=self.root)
         if code != EXIT_PASS:
-            raise EnvironmentMissing("gh api %s 失败（未登录或无权限）：%s" % (api_path, err.strip()))
+            blob = (err or out).strip()
+            if "HTTP 404" in blob or "Not Found" in blob:
+                # 远端对象不存在 = 发布未达成（FAIL），不是环境缺失。
+                raise GhNotFound("远端对象不存在：%s（%s）" % (api_path, blob))
+            raise EnvironmentMissing("gh api %s 失败（未登录或无权限）：%s" % (api_path, blob))
         return json.loads(out)
 
     def download_asset(self, name: str, dest: Path) -> Path:
@@ -669,7 +685,11 @@ def check_extracted_self_sufficient(ctx: Context) -> List[str]:
 
 
 def _release_commit(ctx: Context) -> str:
-    return ctx.git("rev-parse", "%s^{commit}" % ctx.tag).strip()
+    try:
+        return ctx.git("rev-parse", "%s^{commit}" % ctx.tag).strip()
+    except EnvironmentMissing as exc:
+        # 本地都没有这个 tag ⇒ 发布未达成（不是环境缺失）。
+        raise ReleaseNotAchieved("本地不存在 tag %r：%s" % (ctx.tag, exc))
 
 
 def check_repo_public(ctx: Context) -> List[str]:
@@ -757,7 +777,8 @@ def check_push_runs_reconciled(ctx: Context) -> List[str]:
 def _ledger(ctx: Context) -> Dict[str, Any]:
     path = ctx.root / ASSET_LEDGER_RELPATH
     if not path.is_file():
-        raise EnvironmentMissing(
+        # 登记文件缺席 = 发布流程没走完（tag 后追加提交还没做），不是环境缺失。
+        raise ReleaseNotAchieved(
             "缺少附件登记 %s：先用 --record-assets 生成，并作为 tag 之后的追加提交入库"
             % ASSET_LEDGER_RELPATH
         )
@@ -1041,6 +1062,8 @@ def run_checks(ctx: Context, checks, verbose: bool = True) -> List[str]:
             problems = func(ctx)
         except EnvironmentMissing:
             raise
+        except ReleaseNotAchieved as exc:
+            problems = [str(exc)]
         except Exception:  # 检查自身炸掉也必须算 FAIL，不能静默跳过
             problems = ["检查内部异常：%s" % traceback.format_exc(limit=2).strip().replace("\n", " | ")]
         if problems:
@@ -1084,6 +1107,8 @@ def run_mutation(verbose: bool = True) -> int:
             problems = func(mutation.build())
         except EnvironmentMissing as exc:
             problems = ["变异世界触发环境缺失（这不算被打红）：%s" % exc]
+        except ReleaseNotAchieved as exc:
+            problems = [str(exc)]
         except Exception as exc:  # 变异世界构造失败也要报，不能当成"抓到了"
             problems = ["变异世界自身异常（这不算被打红）：%r" % exc]
         caught = bool(problems)

@@ -140,3 +140,44 @@ def test_gate_does_not_introduce_a_fifth_exit_code(gate):
     assert gate.EXIT_FAIL == 1
     assert gate.EXIT_USAGE_ERROR == 2
     assert gate.EXIT_MISSING_ENV == 3
+
+
+def test_not_published_is_a_fail_not_an_environment_error(gate):
+    """「还没发布」≠「工具没装」。
+
+    本机实测踩中过：仓库 404 / 本地无 tag / 缺附件登记，首版都抛 `EnvironmentMissing`（exit 3），
+    于是"仓库根本没建"看起来像"这台机器没登录 gh"。判据：这四种形态必须是 `ReleaseNotAchieved`
+    （计 FAIL），只有"gh 不存在 / 未登录 / build 缺失"才是 `EnvironmentMissing`。
+    """
+    assert issubclass(gate.ReleaseNotAchieved, Exception)
+    assert not issubclass(gate.ReleaseNotAchieved, gate.EnvironmentMissing)
+    assert issubclass(gate.GhNotFound, gate.ReleaseNotAchieved)
+
+    def ictx(**hooks):
+        return gate.Context(gate.REPO_ROOT, tag="v9.9.9", **hooks)
+
+    # 远端仓库 404 → FAIL 类
+    with pytest.raises(gate.ReleaseNotAchieved):
+        gate.check_repo_public(ictx(gh_json=lambda _p: (_ for _ in ()).throw(gate.GhNotFound("404"))))
+    # 本地没有 tag → FAIL 类
+    with pytest.raises(gate.ReleaseNotAchieved):
+        gate.check_tag_points_at_release_commit(
+            ictx(
+                gh_json=lambda _p: {"object": {"type": "tag", "sha": "s"}},
+                git=lambda *_a: (_ for _ in ()).throw(gate.EnvironmentMissing("bad revision")),
+            )
+        )
+    # 缺附件登记 → FAIL 类
+    with pytest.raises(gate.ReleaseNotAchieved):
+        gate.check_release_assets_match_ledger(ictx(gh_json=lambda _p: {"assets": []}))
+
+    # 阴性对照：真环境缺失（gh 缺失 / 未登录）仍是 EnvironmentMissing，不能算 FAIL。
+    def _missing_download(_name, _dest):
+        raise gate.EnvironmentMissing("找不到 gh CLI")
+
+    with pytest.raises(gate.EnvironmentMissing):
+        gate.Context(
+            gate.REPO_ROOT,
+            tag="v9.9.9",
+            download_asset=_missing_download,
+        ).download_asset("x", REPO_ROOT)
