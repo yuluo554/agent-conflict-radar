@@ -37,7 +37,7 @@ GitHub 仓库名 `agent-conflict-radar`；`pyproject.toml` 的 `name = "agent-co
 
 | 模式 | 判据 |
 |---|---|
-| 默认（离线） | C01–C11：工作树干净 / 无运行产物入库 / 名字四向 / 退出码冻结 / 矩阵自检 / 矩阵机器无关 / 提交面脱敏 / MANIFEST 覆盖 / **真建 sdist 核对** / **解包即用** |
+| 默认（离线） | C01–C11：工作树干净 / 无运行产物入库 / 名字四向 / 退出码冻结 / 矩阵自检 / 矩阵机器无关 / 提交面脱敏 / MANIFEST 覆盖 / **真建 sdist 核对** / **解包即用** / **发布件可复现**（同 ref 两次构建逐字节相同） |
 | `--online` | O01–O07：仓库公开 / annotated tag 指向发布提交 / CI **逐 job** 全 success / push 事件与 run 对账 / 附件集合与登记一致 / **逐个下载复算 sha256** / **附件与 tag 树逐字节同源** |
 | `--mutation` | 门自身的可证伪性：**检查项数 == 变异组数**（18 ↔ 18），每条检查必须被对应变异打红 |
 
@@ -79,7 +79,9 @@ GitHub 仓库名 `agent-conflict-radar`；`pyproject.toml` 的 `name = "agent-co
 5. 建仓：gh repo create yuluo554/agent-conflict-radar --public
 6. push main                                     → CI 首跑（**失败照录**）
 7. CI 绿 → 打 annotated tag（version_tag）→ push tag → tag push 触发一条 run
-8. 真建 sdist → 手工上传为 Release 附件（**不得**用仓库 zipball 替代）
+8. `scripts/check_release.py --build-asset dist/release --tag <tag>` 建出源码包
+   （走 `git archive <tag>` → 受控树 → sdist → 归档归一，与门 C09/O07/C11 同一条路径）
+   → 手工上传为 Release 附件（**不得**用仓库 zipball 替代）
 9. 本地留同名副本 → --record-assets 生成 plan/release-assets.json → **追加提交** push
 10. 远端正下载复核：scripts/check_release.py --online --tag <tag>   → 必须 0 FAIL
 11. 中立目录解包跑 selftest（"解压即用"实证）
@@ -117,8 +119,9 @@ GitHub 仓库名 `agent-conflict-radar`；`pyproject.toml` 的 `name = "agent-co
 | `radar bench`（整矩阵） | 15/15 场景、174 项检查、exit 0 |
 | `python -m agent_conflict_radar.bench.gen --check` | 两层断言 + 提交 sha 复算全过，exit 0 |
 | `tools/verify_mutation.py` | 36 组变异全部被抓到（M5 口径） |
-| `scripts/check_release.py` | 离线 10 条无 FAIL |
+| `scripts/check_release.py` | 离线 11 条无 FAIL |
 | `scripts/check_release.py --mutation` | 18 条检查 ↔ 18 条变异，逐条被打红 |
+| `scripts/check_release.py --build-asset` | 同一 ref 连跑两次 sha256 相同（发布件可复现） |
 
 ---
 

@@ -322,8 +322,8 @@
 
 | 等价物 | 结果 |
 |---|---|
-| `py -3.8 -X utf8 -m pytest -q` | **381 passed / 1 skipped**（M5 为 365/1；新增 `tests/test_release_gate.py` 16 条） |
-| `py -3.12 -X utf8 -m pytest -q` | **381 passed / 1 skipped** |
+| `py -3.8 -X utf8 -m pytest -q` | **385 passed / 1 skipped**（M5 为 365/1；`tests/test_release_gate.py` 20 条） |
+| `py -3.12 -X utf8 -m pytest -q` | **385 passed / 1 skipped** |
 | `py -3.12 -X utf8 tools/verify_offline.py --strict` | **38 用例全过** |
 | `radar bench`（整矩阵） | **15/15 场景、174 项检查、覆盖度达标**，exit 0 |
 | `python -m agent_conflict_radar.bench.gen --check` | 两层断言 + 提交 sha 复算全过 |
