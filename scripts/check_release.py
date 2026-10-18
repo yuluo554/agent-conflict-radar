@@ -362,7 +362,7 @@ def _build_sdist_members(root: Path, ref: str = "HEAD") -> Dict[str, bytes]:
         tree_dir.mkdir()
         with tarfile.open(str(archive_path), "r:") as archive:
             _extract_tar(archive, tree_dir)
-        code, out, err = _run([sys.executable, "-m", "build", "--sdist", "--outdir", outdir, str(tree_dir)], cwd=outdir)
+        code, out, err = _run(_build_sdist_argv(outdir, tree_dir), cwd=outdir)
         if code != EXIT_PASS:
             raise EnvironmentMissing("构建 sdist 失败：%s" % ((err or out).strip().splitlines()[-1:]))
         del out, err
@@ -1379,6 +1379,29 @@ def _normalize_sdist_archive(source: Path, target: Path) -> None:
                     out.addfile(member, io.BytesIO(payload))
 
 
+def _build_sdist_argv(outdir: str, source_dir: Path) -> List[str]:
+    """`python -m build --sdist` 的参数；能离线就离线。
+
+    为什么默认要 `--no-isolation`：构建隔离会去 PyPI 抓 `setuptools`/`wheel`，而本项目的
+    运行前提是"断网可跑"。Python 3.8 那台环境里 `setuptools`/`wheel` 都在，隔离反而让
+    sdist 构建**因为没网**而失败（本机实测：3.12 通过、3.8 报
+    `No matching distribution found for wheel`）。
+
+    取舍写在明处：只有当**本解释器**已经能 import `setuptools` 与 `wheel` 时才关隔离；
+    否则退回默认隔离（那种情况下必然联网，属于环境问题而不是门的问题）。
+    """
+    argv = [sys.executable, "-m", "build", "--sdist", "--outdir", outdir]
+    try:
+        import setuptools  # noqa: F401
+        import wheel  # noqa: F401
+
+        argv.append("--no-isolation")
+    except ImportError:
+        pass
+    argv.append(str(source_dir))
+    return argv
+
+
 def _raw_sdist_archive(root: Path, ref: str) -> Tuple[Path, str]:
     """从受控树建一份**原始** sdist，返回 `(临时目录, 归档文件名)`。
 
@@ -1400,9 +1423,7 @@ def _raw_sdist_archive(root: Path, ref: str) -> Tuple[Path, str]:
         tree_dir.mkdir()
         with tarfile.open(str(archive_path), "r:") as archive:
             _extract_tar(archive, tree_dir)
-        code, out, err = _run(
-            [sys.executable, "-m", "build", "--sdist", "--outdir", outdir, str(tree_dir)], cwd=outdir
-        )
+        code, out, err = _run(_build_sdist_argv(outdir, tree_dir), cwd=outdir)
         if code != EXIT_PASS:
             raise EnvironmentMissing("构建 sdist 失败：%s" % ((err or out).strip().splitlines()[-1:]))
         archives = sorted(Path(outdir).glob("*.tar.gz"))
