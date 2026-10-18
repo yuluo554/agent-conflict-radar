@@ -173,6 +173,7 @@ class Context(object):
         self.tag = tag
         self.slug = slug
         self._hooks = hooks
+        self._sdist_cache: Optional[Dict[str, bytes]] = None
 
     # ---- 文件与 git ----
     def tracked(self) -> List[str]:
@@ -210,7 +211,10 @@ class Context(object):
     def sdist_members(self) -> Dict[str, bytes]:
         if "sdist_members" in self._hooks:
             return dict(self._hooks["sdist_members"]())
-        return _build_sdist_members(self.root)
+        # 一次运行只建一次：C09 与 C10 看的是**同一份**源码包（否则两条结论可能对应两个包）。
+        if self._sdist_cache is None:
+            self._sdist_cache = _build_sdist_members(self.root)
+        return dict(self._sdist_cache)
 
     # ---- gh（仅 --online 用） ----
     def gh_json(self, api_path: str) -> Any:
@@ -273,7 +277,7 @@ def _build_sdist_members(root: Path) -> Dict[str, bytes]:
         tree_dir = Path(export_dir) / "tree"
         tree_dir.mkdir()
         with tarfile.open(str(archive_path), "r:") as archive:
-            archive.extractall(str(tree_dir))
+            _extract_tar(archive, tree_dir)
         code, out, err = _run([sys.executable, "-m", "build", "--sdist", "--outdir", outdir, str(tree_dir)], cwd=outdir)
         if code != EXIT_PASS:
             raise EnvironmentMissing("构建 sdist 失败：%s" % ((err or out).strip().splitlines()[-1:]))
@@ -294,6 +298,27 @@ def _build_sdist_members(root: Path) -> Dict[str, bytes]:
     finally:
         shutil.rmtree(export_dir, ignore_errors=True)
         shutil.rmtree(outdir, ignore_errors=True)
+
+
+#: sdist 里 setuptools **必然**生成的包元数据（不是本仓产物）。逐名放行，多一个名字就红。
+GENERATED_EGG_INFO = frozenset(
+    {
+        "src/agent_conflict_radar.egg-info/PKG-INFO",
+        "src/agent_conflict_radar.egg-info/SOURCES.txt",
+        "src/agent_conflict_radar.egg-info/dependency_links.txt",
+        "src/agent_conflict_radar.egg-info/entry_points.txt",
+        "src/agent_conflict_radar.egg-info/requires.txt",
+        "src/agent_conflict_radar.egg-info/top_level.txt",
+    }
+)
+
+
+def _extract_tar(archive: tarfile.TarFile, dest: Path) -> None:
+    """解 tar；3.12+ 传 `filter="data"` 消掉弃用警告，3.8 退回无 filter 的旧签名（K6）。"""
+    try:
+        archive.extractall(str(dest), filter="data")
+    except TypeError:
+        archive.extractall(str(dest))
 
 
 def _extract_members(members: Dict[str, bytes], dest: Path) -> Path:
@@ -575,11 +600,14 @@ def check_sdist_contents(ctx: Context) -> List[str]:
     leaked = sorted(
         name
         for name in names
-        if name.rsplit("/", 1)[-1] in RUNTIME_PRODUCTS
-        or "__pycache__" in name
-        or name.startswith("out/")
-        or name.startswith("dist/")
-        or ".egg-info" in name
+        if name not in GENERATED_EGG_INFO
+        and (
+            name.rsplit("/", 1)[-1] in RUNTIME_PRODUCTS
+            or "__pycache__" in name
+            or name.startswith("out/")
+            or name.startswith("dist/")
+            or ".egg-info" in name
+        )
     )
     if leaked:
         failures.append("源码包含运行/构建产物：%s" % leaked[:10])
