@@ -27,6 +27,7 @@ from . import detect as detect_module
 from . import discover
 from . import gitio
 from . import intent as intent_module
+from . import report as report_module
 from . import serialize
 from . import stages
 from .errors import ConfigError, RadarError, UsageError
@@ -216,6 +217,8 @@ def _dispatch(args) -> int:
         return _cmd_intent(cfg, args)
     if command == "detect":
         return _cmd_detect(cfg, args)
+    if command == "report":
+        return _cmd_report(cfg, args)
     raise UsageError("未知命令：%r" % command)  # pragma: no cover - 由 parser 兜住
 
 
@@ -289,6 +292,40 @@ def _cmd_detect(cfg, args) -> int:
         target_dir = _resolve_out_dir(out_dir)
         serialize.write_atomic(target_dir / "conflicts.json", text)
     sys.stdout.write(text)
+    return EXIT_CONFLICTS_FOUND if result.conflicts else EXIT_OK
+
+
+def _cmd_report(cfg, args) -> int:
+    """`radar report`：M3 的 `ConflictSet` → `report.md`（人读）+ `conflicts.json`（机读）。
+
+    退出码语义（与 `detect` 同一条口径）：**有冲突 → 1，无冲突 → 0**。`undetermined` /
+    `degraded` / `approximate` **不改**退出码，但报告里逐条列出（"没底"绝不读成"没问题"）。
+
+    **单一渲染源**：`report_module.build_report` 产出的 `payload` 就是 `conflicts.json` 的内容
+    （与 `detect` 的落盘产物**同内容同字节**），Markdown 是它的纯函数——不存在"两份各自生成、
+    再人工比对"的形态。`--format` 只决定**打印/落盘哪一份**，不改变两份产物的内容。
+    """
+    result = detect_module.build_conflict_set(
+        args.repo_resolved,
+        getattr(args, "claude_root", None),
+        getattr(args, "codex_root", None),
+        cfg,
+        now=getattr(args, "now", None),
+    )
+    surface = report_module.build_report(result, cfg, repo=args.repo_resolved)
+    fmt = getattr(args, "format", "both")
+    json_text = surface.json_text()
+    out_dir = getattr(args, "out_dir", None)
+    if out_dir:
+        target_dir = _resolve_out_dir(out_dir)
+        if fmt in ("json", "both"):
+            serialize.write_atomic(target_dir / "conflicts.json", json_text)
+        if fmt in ("md", "both"):
+            serialize.write_atomic(target_dir / "report.md", surface.markdown)
+    if fmt == "json":
+        sys.stdout.write(json_text)
+    else:
+        sys.stdout.write(surface.markdown)
     return EXIT_CONFLICTS_FOUND if result.conflicts else EXIT_OK
 
 

@@ -41,6 +41,7 @@ ALLOWED_LITERALS = {
     ("discover.py", 400): "错误详情文本的截断长度：诊断展示用常量，不是判定阈值（阈值一律读 config）",
     ("intent.py", 400): "同 discover.py：错误详情文本的截断长度，只影响报错信息长度，不参与任何判定",
     ("detect.py", 2): "符号三元组 `(限定名, 起, 止)` 的落位下标：位置是**结构**不是策略阈值（阈值一律读 config）",
+    ("report.py", 2): "同上：渲染 `symbol_spans` 三元组时取第三格（止行）的下标，是**结构**不是策略阈值",
     ("detect.py", 128): "`git merge-tree` 的环境错误退出码：是 git 的**输出契约**（本机实测值），不是可调阈值——判据仍由 config 的 `git.merge_tree_enabled` / 超时决定",
 }
 
@@ -57,6 +58,7 @@ REQUIRED_MODULES = (
     "gitio.py",
     "intent.py",
     "paths.py",
+    "report.py",
     "serialize.py",
     "stages.py",
     "versions.py",

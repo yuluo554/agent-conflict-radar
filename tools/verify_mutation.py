@@ -67,12 +67,12 @@ MUTATIONS: List[Mutation] = [
     Mutation(
         "M4",
         "src/agent_conflict_radar/stages.py",
-        'STAGE_NOT_READY = {\n    "report": "M4",',
-        'STAGE_NOT_READY = {\n    "detect": "M3",\n    "report": "M4",',
+        'STAGE_NOT_READY = {\n    "bench": "M5",',
+        'STAGE_NOT_READY = {\n    "report": "M4",\n    "bench": "M5",',
         "tests/test_stage_guard.py::test_no_command_is_unclassified",
-        "把**已退役**的 detect 又塞回阶段未就绪表（幽灵语义复活）→ 阶段守卫必须变红。"
-        "锚点必须指向**仍在**未就绪表里的那条命令：M3 交付 `detect` 时旧锚点（`\"detect\": \"M3\"`）"
-        "当场漂移，变异脚本直接报「锚点未命中」——这正是三重断言该有的行为",
+        "把**已退役**的 report 又塞回阶段未就绪表（幽灵语义复活）→ 阶段守卫必须变红。"
+        "锚点必须指向**仍在**未就绪表里的那条命令：M3 交付 `detect` 时锚点由 `detect` 漂到 `report`，"
+        "M4 交付 `report` 后再次漂移——现在只剩 `bench`。这正是三重断言该有的行为",
     ),
     Mutation(
         "M5",
@@ -305,6 +305,40 @@ MUTATIONS: List[Mutation] = [
         "            by_level_membership[level] += 1",
         "tests/test_detect.py::test_membership_count_exceeds_entry_count_when_one_record_hits_two_levels",
         "`by_max_level`（划分）被改成记成员数 → K12 的两栏口径必须变红",
+    ),
+    Mutation(
+        "M30",
+        "src/agent_conflict_radar/report.py",
+        "    serialize.assert_no_external_resources(text, where=\"report.md\")",
+        "    pass  # 变异：渲染出口不再做零外链断言",
+        "tests/test_report.py::test_external_resources_are_rejected_at_the_render_exit",
+        "渲染出口的零外链断言被拿掉（只在测试里验一次）→ 「带 URL 的 payload 必须当场抛错」"
+        "这条守门必须变红（K13 的第二律）",
+    ),
+    Mutation(
+        "M31",
+        "src/agent_conflict_radar/report.py",
+        "        if \"symbols\" in record:",
+        "        if True:  # 变异：假定所有记录都有符号字段",
+        "tests/test_report.py::test_approximate_record_without_symbols_key_is_rendered",
+        "渲染层对 `approximate=true` 的记录直接下标取 `symbols` → 「没有这个键也能渲染」必须变红"
+        "（M4 起点快照点名的已知形态）",
+    ),
+    Mutation(
+        "M32",
+        "src/agent_conflict_radar/report.py",
+        "    return SUGGESTIONS.get(record.get(\"severity_key\", \"\"), SUGGESTION_FALLBACK)",
+        "    return SUGGESTIONS[\"same_symbol\"]  # 变异：建议不再按档位分派",
+        "tests/test_report.py::test_suggestions_are_rule_templates_keyed_by_engine_severity",
+        "建议模板不按 `severity_key` 分派（所有档位同一句）→ 规则模板判据必须变红",
+    ),
+    Mutation(
+        "M33",
+        "src/agent_conflict_radar/report.py",
+        "    for index, record in enumerate(sorted_for_display(conflicts), start=1):",
+        "    for index, record in enumerate(conflicts, start=1):  # 变异：不再按严重度排序",
+        "tests/test_report.py::test_display_order_is_severity_desc_then_level_and_path",
+        "报告不再按 severity 降序（直接用引擎的数组序）→ 展示序判据必须变红",
     ),
 ]
 

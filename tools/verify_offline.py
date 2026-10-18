@@ -149,6 +149,7 @@ def _module_argv(*args: str) -> List[str]:
 _SCAN_FIXTURES: dict = {}
 _INTENT_FIXTURES: dict = {}
 _DETECT_FIXTURES: dict = {}
+_REPORT_FIXTURES: dict = {}
 
 
 def _scan_fixture(scratch: str) -> Tuple[str, str, str]:
@@ -219,6 +220,34 @@ def _detect_fixture(scratch: str) -> Tuple[str, str, str]:
     return _DETECT_FIXTURES[scratch]
 
 
+def _report_fixtures(scratch: str):
+    """造 `report` 的两份夹具（M4）：有冲突（三粒度齐全）+ 无冲突（负样本）。
+
+    两份必须分开物化：报告要验证**退出码 1 / 0 两侧**，只跑一侧等于只验了一半判据。
+    `key` 空间也分开（`plan/HANDOFF-M4` §四 第 8 条）。
+    """
+    import agent_conflict_radar.bench.gen as bench_gen
+
+    if scratch in _REPORT_FIXTURES:
+        return _REPORT_FIXTURES[scratch]
+
+    def _materialize(scenario_id, dirname, empty_prefix):
+        dest = os.path.join(scratch, dirname)
+        bench_gen.materialize_scenario(bench_gen.scenario_by_id(scenario_id), dest)
+        claude = os.path.join(dest, "sessions", "claude")
+        codex = os.path.join(dest, "sessions", "codex")
+        if not os.path.isdir(codex):
+            codex = os.path.join(scratch, empty_prefix)
+            os.makedirs(codex, exist_ok=True)
+        return (os.path.join(dest, "repo"), claude, codex)
+
+    _REPORT_FIXTURES[scratch] = {
+        "conflict": _materialize("whole_file_overwrite", "report-conflict", "report-empty-codex"),
+        "clean": _materialize("negative_no_overlap", "report-clean", "report-clean-empty-codex"),
+    }
+    return _REPORT_FIXTURES[scratch]
+
+
 def _scan_argv(fixture, *prefix):
     repo, claude_root, codex_root = fixture
     return list(prefix) + [
@@ -247,6 +276,23 @@ def _detect_argv(fixture, *prefix):
         "--codex-root", codex_root,
         "--now", "2026-01-01T00:10:00Z",
     ]
+
+
+def _report_argv(fixture, *prefix, **kwargs):
+    repo, claude_root, codex_root = fixture
+    out_dir = kwargs.get("out_dir")
+    fmt = kwargs.get("fmt")
+    argv = list(prefix) + [
+        "report", "--repo", repo,
+        "--claude-root", claude_root,
+        "--codex-root", codex_root,
+        "--now", "2026-01-01T00:10:00Z",
+    ]
+    if fmt is not None:
+        argv += ["--format", fmt]
+    if out_dir is not None:
+        argv += ["--out-dir", out_dir]
+    return argv
 
 
 def build_cases(repo_dir: str) -> List[Case]:
@@ -340,6 +386,62 @@ def build_cases(repo_dir: str) -> List[Case]:
         )
     )
 
+    # ---- 已交付：report（M4；有冲突 → exit 1、无冲突 → exit 0，三种 --format 都真跑）----
+    report_fixtures = _report_fixtures(repo_dir)
+    cases.append(
+        Case(
+            "module:report(有冲突, both)",
+            _report_argv(report_fixtures["conflict"], *_module_argv()),
+            EXIT_CONFLICTS_FOUND,
+            cwd=repo_dir,
+            command="report",
+            note="有冲突 → exit 1（与 detect 同一口径）；默认 --format=both 打印 Markdown",
+        )
+    )
+    cases.append(
+        Case(
+            "module:report(--format json)",
+            _report_argv(report_fixtures["conflict"], *_module_argv(), fmt="json"),
+            EXIT_CONFLICTS_FOUND,
+            cwd=repo_dir,
+            command="report",
+            note="机读通路：payload 与 detect 的 conflicts.json 同内容同字节",
+        )
+    )
+    cases.append(
+        Case(
+            "module:report(--format md)",
+            _report_argv(report_fixtures["conflict"], *_module_argv(), fmt="md"),
+            EXIT_CONFLICTS_FOUND,
+            cwd=repo_dir,
+            command="report",
+            note="人读通路：零外链断言常驻渲染出口",
+        )
+    )
+    cases.append(
+        Case(
+            "module:report(无冲突)",
+            _report_argv(report_fixtures["clean"], *_module_argv()),
+            EXIT_OK,
+            cwd=repo_dir,
+            command="report",
+            note="无冲突 → exit 0（对照组：1 不是恒返回）",
+        )
+    )
+    cases.append(
+        Case(
+            "env:report 会话源缺失",
+            _module_argv("report", "--repo", report_fixtures["conflict"][0],
+                         "--claude-root", os.path.join(repo_dir, "no-such-root"),
+                         "--codex-root", report_fixtures["conflict"][2],
+                         "--now", "2026-01-01T00:10:00Z"),
+            EXIT_ENVIRONMENT,
+            cwd=repo_dir,
+            command="report",
+            note="显式指定的会话根不存在 → exit 3，不得退化成 exit 0 空结果",
+        )
+    )
+
     # ---- 阶段未就绪命令（当前契约：exit 4）----
     for command in sorted(stages.STAGE_NOT_READY):
         argv = _module_argv(command) + _repo_flag_if_supported(command, repo_dir)
@@ -417,6 +519,7 @@ def console_script_cases(repo_dir: str) -> List[Case]:
     fixture = _scan_fixture(repo_dir)
     intent_fixture = _intent_fixture(repo_dir)
     detect_fixture = _detect_fixture(repo_dir)
+    report_fixtures = _report_fixtures(repo_dir)
     cases = [
         Case("console:--version", ["radar", "--version"], EXIT_OK, cwd=repo_dir, command="--version"),
         Case("console:config", ["radar", "config"], EXIT_OK, cwd=repo_dir, command="config"),
@@ -435,6 +538,27 @@ def console_script_cases(repo_dir: str) -> List[Case]:
             EXIT_CONFLICTS_FOUND,
             cwd=repo_dir,
             command="detect",
+        ),
+        Case(
+            "console:report(有冲突)",
+            _report_argv(report_fixtures["conflict"], "radar"),
+            EXIT_CONFLICTS_FOUND,
+            cwd=repo_dir,
+            command="report",
+        ),
+        Case(
+            "console:report(--format json)",
+            _report_argv(report_fixtures["conflict"], "radar", fmt="json"),
+            EXIT_CONFLICTS_FOUND,
+            cwd=repo_dir,
+            command="report",
+        ),
+        Case(
+            "console:report(无冲突)",
+            _report_argv(report_fixtures["clean"], "radar"),
+            EXIT_OK,
+            cwd=repo_dir,
+            command="report",
         ),
     ]
     for command in sorted(stages.STAGE_NOT_READY):
