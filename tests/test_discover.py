@@ -334,8 +334,8 @@ def test_norm_expands_windows_8_3_short_names(tmp_path):
     """8.3 短名与长名必须归一成同一个键。
 
     这是 **CI 首跑 windows leg 全红** 的根因：runner 的 `TEMP` 是
-    `C:/Users/RUNNER~1/AppData/Local/Temp/...`（8.3），而 `git worktree list` 报长名
-    `C:/Users/runneradmin/...`。只做 `normcase(normpath())` 时前缀对不上，于是
+    `C:/Users/<8.3 短名>/AppData/Local/Temp/...`（8.3），而 `git worktree list` 报长名
+    `C:/Users/<长名>/...`。只做 `normcase(normpath())` 时前缀对不上，于是
     **每个会话都被判成 `in_worktree=False`，整棵矩阵一个冲突都不产出**——
     而 scan/intent 层看起来还"正常"。
 

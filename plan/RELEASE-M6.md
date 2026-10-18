@@ -167,8 +167,8 @@ GitHub 仓库名 `agent-conflict-radar`；`pyproject.toml` 的 `name = "agent-co
 1. **ubuntu 两腿**：`intent._is_clean_relative("C:/abs/a.py")` 在 POSIX 上返回 `True`
    ——`os.path.isabs` 不认盘符，于是盘符式绝对路径被判成"干净的相对路径"。
    修复：加 `_DRIVE_ABSOLUTE_RE` 与 POSIX 绝对路径两条显式判据（跨平台一致）。
-2. **windows 两腿**：runner 的 `TEMP` 是 **8.3 短名**（`C:/Users/RUNNER~1/...`），而
-   `git worktree list` 报长名（`C:/Users/runneradmin/...`）。只做 `normcase(normpath())`
+2. **windows 两腿**：runner 的 `TEMP` 是 **8.3 短名**（`C:/Users/<8.3 短名>/...`），而
+   `git worktree list` 报长名（`C:/Users/<长名>/...`）。只做 `normcase(normpath())`
    时前缀对不上 → 每个会话都被判成 `in_worktree=False` → **整棵矩阵一个冲突都不产出**
    （而 `scan`/`intent` 层看起来还"正常"）。修复：`discover._norm()` 先 `realpath` 再归一。
 3. 第三轮 Windows 仍红：`C07` 脱敏判据把**文档字符串里解释机制的示例路径**当成泄露
