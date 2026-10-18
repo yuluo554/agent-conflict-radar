@@ -407,13 +407,46 @@ def test_bench_writes_last_run_into_the_matrix_dir_by_default(tmp_path, cfg):
     bench = _copy_bench(tmp_path)
     cwd = tmp_path / "cwd"
     cwd.mkdir()
+    before = (bench / "last_run.json").read_bytes() if (bench / "last_run.json").is_file() else None
     code, _out, err = _run_cli(
         ["bench", "--bench-dir", str(bench), "--only", "negative_no_overlap"], cwd=cwd
     )
     assert code == EXIT_OK, err
     assert os.listdir(str(cwd)) == []
-    assert (bench / "last_run.json").is_file(), "默认产物应落在矩阵目录"
+    # `--only` 是抽检：**不覆盖**矩阵目录里的整矩阵记录，只提示"要落盘请给 --out-dir"。
+    after = (bench / "last_run.json").read_bytes() if (bench / "last_run.json").is_file() else None
+    assert after == before, "`--only` 抽检不得覆盖整矩阵记录"
+    assert "--out-dir" in _out.decode("utf-8", errors="replace")
+
+    code, _out, err = _run_cli(["bench", "--bench-dir", str(bench)], cwd=cwd)
+    assert code == EXIT_OK, err
+    assert (bench / "last_run.json").is_file(), "整矩阵跑应落矩阵目录"
 
     payload = json.loads((bench / "last_run.json").read_text(encoding="utf-8"))
     assert payload["summary"]["all_passed"] is True
-    assert payload["only"] == ["negative_no_overlap"]
+    assert payload["only"] is None
+
+
+def test_only_run_does_not_clobber_the_full_run_record(tmp_path, cfg):
+    """抽检不能把交付物换成半份结果。
+
+    这条是 CI 形同虚设的反面：若 `--only` 覆盖 `bench/last_run.json`，任何人跑一次单场景抽检，
+    仓库里的"最近一次整矩阵判定"就变成了"1 条通过"——读起来像"全矩阵通过"。
+    """
+    bench = _copy_bench(tmp_path)
+    _run_cli(["bench", "--bench-dir", str(bench)])
+    full_record = (bench / "last_run.json").read_bytes()
+
+    code, _out, _err = _run_cli(["bench", "--bench-dir", str(bench), "--only", "negative_no_overlap"])
+    assert code == EXIT_OK
+    assert (bench / "last_run.json").read_bytes() == full_record, "抽检覆盖了整矩阵记录"
+
+    # 显式 `--out-dir` 时抽检**可以**落盘——要求落盘就落，这不算覆盖交付物。
+    code, _out, _err = _run_cli(
+        ["bench", "--bench-dir", str(bench), "--only", "negative_no_overlap",
+         "--out-dir", str(tmp_path / "subset-out")]
+    )
+    assert code == EXIT_OK
+    subset = json.loads((tmp_path / "subset-out" / "last_run.json").read_text(encoding="utf-8"))
+    assert subset["only"] == ["negative_no_overlap"]
+    assert (bench / "last_run.json").read_bytes() == full_record

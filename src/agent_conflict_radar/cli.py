@@ -332,6 +332,10 @@ def _cmd_bench(cfg, args) -> int:
     `--out-dir` 给了就落 `last_run.json`（经 `serialize.write_atomic`，K2）；不给时落
     **矩阵目录**（`<bench-dir>/last_run.json`，`plan/05` §二 的布局）——这是唯一一条默认写盘的命令：
     "最近一次评分结果"本身就是交付物（DoD 点名的实物），不落盘就无法被复核。
+
+    **例外（有意的）**：`--only` 只跑子集时**不覆盖**矩阵目录里的 `last_run.json`——那份记录代表
+    "整棵矩阵的最近一次判定"，被一次抽检覆盖就等于把交付物换成了半份结果。抽检要落盘请显式给
+    `--out-dir`。这条由 `test_only_run_does_not_clobber_the_full_run_record` 钉住。
     """
     bench_dir = getattr(args, "bench_dir", None)
     only_raw = getattr(args, "only", None)
@@ -347,9 +351,15 @@ def _cmd_bench(cfg, args) -> int:
     text = bench_module.render_summary(result)
     if target_dir is not None:
         bench_module.write_last_run(str(target_dir), result)
-    else:
-        # 默认落**本轮解析出的**矩阵目录（`--bench-dir` 或仓库根 bench/），不另算一遍路径规则。
+    elif only is None:
+        # 整矩阵跑：落**本轮解析出的**矩阵目录（`--bench-dir` 或仓库根 bench/）。
         bench_module.write_last_run(result.bench_dir, result)
+        text += "产物：已写入矩阵目录下的 %s（整矩阵最近一次判定）\n" % bench_module.LAST_RUN_FILENAME
+    else:
+        text += (
+            "产物：本次是 `--only` 子集，**不覆盖**矩阵目录里的 %s；要落盘请给 `--out-dir`。\n"
+            % bench_module.LAST_RUN_FILENAME
+        )
     sys.stdout.write(text)
     return EXIT_OK if result.all_passed() else EXIT_CONFLICTS_FOUND
 

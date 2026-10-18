@@ -70,7 +70,7 @@
 | M2 变更意图提取（Edit/Write/apply_patch + git status/diff） | 会话内 `file_path` / `old_string` / `new_string` / `apply_patch` 文本；`git status --porcelain` + `git diff` + `git diff --cached`；`git show HEAD:<path>` 作定位基线 | 随包 | 合成会话解析对账（八条意图场景逐条一致）；无法定位时 `coarse`/`unknown` 而非猜测；同输入同输出 | ✅ **M2 完成**（2026-10-18）：`radar intent` 交付（K15 四步走完）；双解释器 248 passed / 1 skipped；冒烟 27 用例；变异 22 组全检出；R4 闭环 |
 | M3 三级检测（文件 / 区块 / 符号） | `git merge-tree --write-tree` ✅；Python `ast` ✅ | 随包；git 为运行期必需（缺失 exit 3） | 合成冲突矩阵检出集合精确匹配；负样本零误报；只读断言（工作区 hash 前后一致） | ✅ **M3 完成**（2026-10-18）：`radar detect` 交付（K15 四步走完，**退出码 1 首次真正上岗**）；七条冻结场景的检出集合逐条精确匹配 + 三态各有合成用例；双解释器 299 passed / 1 skipped；冒烟 29 用例；变异 29 组全检出 |
 | M4 预警报告（Markdown + JSON + 可选通知） | M3 冲突清单 | 随包 | 报告排序稳定；退出码四语义测试；通知不可用时 `notify_unavailable` 不影响主流程 | ✅ **M4 完成**（2026-10-18）：`radar report` 交付（K15 四步走完）；单一渲染源（Markdown = JSON payload 的纯函数）+ 渲染三律（零判定 AST 门禁 / 零外链常驻出口 / 双跑逐字节）+ 退出码 0/1/2/3 各有实物；双解释器 336 passed / 1 skipped；冒烟 35 用例；变异 33 组全检出 |
-| M5 合成冲突矩阵 + 植入真值 + **一条命令评分** | 程序化构造场景（同文件异函数 / 同函数异行 / 整文件覆盖 / subagent 派生 / 负样本 / 阈值成对）+ 意图矩阵八条 | 随包零外部依赖 | 生成器同步标注真值；`radar bench` 逐场景物化 → 跑链路 → 集合精确匹配；覆盖度口径写 manifest 并在消费侧复核 | ✅ **M5 完成**（2026-10-18）：`radar bench` 交付（K15 四步 + K1 退役 exit 4）；整矩阵 **15/15 场景、174 项检查 0 失败**；`bench/last_run.json` 落盘（K2 + K17）；双解释器 364 passed / 1 skipped；冒烟 38 用例；变异 36 组全检出 |
+| M5 合成冲突矩阵 + 植入真值 + **一条命令评分** | 程序化构造场景（同文件异函数 / 同函数异行 / 整文件覆盖 / subagent 派生 / 负样本 / 阈值成对）+ 意图矩阵八条 | 随包零外部依赖 | 生成器同步标注真值；`radar bench` 逐场景物化 → 跑链路 → 集合精确匹配；覆盖度口径写 manifest 并在消费侧复核 | ✅ **M5 完成**（2026-10-18）：`radar bench` 交付（K15 四步 + K1 退役 exit 4）；整矩阵 **15/15 场景、174 项检查 0 失败**；`bench/last_run.json` 落盘（K2 + K17）；双解释器 365 passed / 1 skipped；冒烟 38 用例；变异 36 组全检出 |
 | 隐私设计（纯本地零上传） | 无网络依赖 | 全链路本地 | 依赖扫描 + 断网运行 + 入库内容扫描（真实路径 / session id 零命中） | ✅ **M5 复核通过**（2026-10-18）：零网络导入面审计通过；`bench/`、`docs/`、`plan/`、README 扫描无真实盘符路径 / `/Users/` / `/home/` / Real-UUID / 真实用户名；`last_run.json` 机器无关 |
 | 发布闭环（tag + Release 附产物 + 留档） | GitHub 公开仓库 | Release 附源码 zip + sha256 留档 | 仓库内耐久副本 + sha256 可复验；tag 树内含发布留档 | ⬜ 待 M6 |
 | 文件监听实时模式 | 扩展项 | 不入首期 | — | ⬜ 扩展 |
@@ -287,8 +287,8 @@
 
 | 等价物 | 结果 |
 |---|---|
-| `py -3.8 -X utf8 -m pytest -q` | **364 passed / 1 skipped**（退出码 0） |
-| `py -3.12 -X utf8 -m pytest -q` | **364 passed / 1 skipped**（退出码 0） |
+| `py -3.8 -X utf8 -m pytest -q` | **365 passed / 1 skipped**（退出码 0） |
+| `py -3.12 -X utf8 -m pytest -q` | **365 passed / 1 skipped**（退出码 0） |
 | `py -3.12 -X utf8 tools/verify_offline.py --strict` | **38 用例全过**（M4 为 35：新增 `bench` 模块 3 条 + console 1 条，退役「未就绪」2 条），退出码 0 |
 | `py -3.12 -X utf8 -m agent_conflict_radar bench` | **15/15 场景通过、174 项检查 0 失败**，覆盖度门槛达标，退出码 0；`bench/last_run.json` 落盘 |
 | `py -3.12 -X utf8 -m agent_conflict_radar.bench.gen --check` | 两层断言 + 提交 sha 复算全过（`last_run.json` 作为运行产物被**单名放行**），退出码 0 |

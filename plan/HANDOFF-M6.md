@@ -22,6 +22,7 @@
 | 集合精确匹配（多报/漏报均失败） | `_set_check` 输出 `missing` / `extra` | 5 条**消费处**探针（`test_bench_fails_when_*`） |
 | 覆盖度门槛（消费侧复核） | `_check_manifest` / `_threshold_pair_check` | `test_coverage_gate_is_enforced_on_the_consumption_side` + `test_coverage_counts_the_whole_matrix_even_under_only` |
 | `last_run.json`（K2/K17） | `write_last_run` → `serialize.write_atomic` | 冻结契约 / 双跑逐字节 / 机器无关 三条断言 |
+| `--only` 抽检不覆盖整矩阵记录 | `cli._cmd_bench` 只在整矩阵跑时默认写盘 | `test_only_run_does_not_clobber_the_full_run_record`（覆盖前后逐字节比对） |
 | `--only` 用法错误（exit 2） | 未知 id / 过滤后为空 | `test_unknown_only_id_is_a_usage_error` / `test_only_comma_on_the_cli_is_a_usage_error` |
 | `bench` 退出码 0/1/2/3 | 全过 0、任一失败 1、用法 2、依赖 3 | 四条独立用例 + 三条冒烟 |
 | **K1 退役四步** | 删 `EXIT_NOT_READY` / `StageNotReady` / `STAGE_NOT_READY` / `milestone_for` | `not hasattr` 三连 + 变异组 **M34** |
@@ -35,7 +36,7 @@
 
 | 项 | 值 |
 |---|---|
-| 测试数 | `py -3.8` 364 passed / 1 skipped；`py -3.12` 364 passed / 1 skipped |
+| 测试数 | `py -3.8` 365 passed / 1 skipped；`py -3.12` 365 passed / 1 skipped |
 | 跳过项 | `tests/test_paths_adaptive.py` 符号链接用例——文件系统不支持创建目录符号链接（声明式跳过，附原因） |
 | 离线冒烟 | `--strict` 下 **38 用例全过**（模块 27 + 生成器自检 1 + console 10） |
 | 变异验证 | **36 组**全部被对应守门抓到，仓库按字节还原 |
@@ -192,7 +193,7 @@
       `bench --out-dir` / 生成器 `--check` 全过；干净 venv 里 `verify_offline.py --strict` 38/38
 * [x] **隐私审计**：真实盘符路径 / `/Users/` / `/home/` / Real-UUID / 真实用户名 零命中；零网络导入面通过
 * [x] **桩哨兵**：0 命中（唯一 `NotImplementedError` 是测试里的捕获分支，已解释）
-* [x] **双解释器全量 pytest**：各 364 passed / 1 skipped
+* [x] **双解释器全量 pytest**：各 365 passed / 1 skipped
 * [x] **变异验证**：36 组全检出（M4 为 33）
 * [x] **技术报告**：`docs/技术报告.md` 十节落盘
 * [x] **`HANDOFF-M6.md`（本文件）**：六节 + 起点快照，库内相对路径、无本机绝对路径
