@@ -251,7 +251,9 @@ class Context(object):
 
     def bench_dir(self) -> Path:
         if "bench_dir" in self._hooks:
-            return Path(self._hooks["bench_dir"]())
+            hook = self._hooks["bench_dir"]
+            # 允许传路径本身或返回路径的函数：变异世界写 `bench_dir=<path>` 是最自然的形态。
+            return Path(hook() if callable(hook) else hook)
         return self.root / "bench"
 
     # ---- sdist ----
@@ -1058,14 +1060,16 @@ def _mutation_worlds() -> List[Mutation]:
         return Context(root)
 
     def c03() -> Context:
-        root = _tmp_tree(
-            {
-                "README.md": "# 拼错的名字\n",
-                "pyproject.toml": '[project]\nname = "wrong-name"\n',
-                "src/agent_conflict_radar/__init__.py": '__version__ = "0.0.1"\n',
-            }
+        files = {
+            "README.md": "# 拼错的名字\n",
+            "pyproject.toml": '[project]\nname = "wrong-name"\n',
+            "src/agent_conflict_radar/__init__.py": '__version__ = "0.0.1"\n',
+        }
+        root = _tmp_tree(files)
+        return Context(
+            root,
+            tree_files=lambda: dict((rel, text.encode("utf-8")) for rel, text in files.items()),
         )
-        return Context(root)
 
     def c04() -> Context:
         root = _tmp_tree({"src/agent_conflict_radar/exit_codes.py": "EXIT_NOT_READY = 4\n"})
@@ -1081,10 +1085,12 @@ def _mutation_worlds() -> List[Mutation]:
         return Context(REPO_ROOT, bench_dir=bench)
 
     def c07() -> Context:
-        root = _tmp_tree({"leak.txt": "root = C:/Users/%s/project\n" % getpass.getuser()})
+        leaked = "root = C:/Users/%s/project\n" % getpass.getuser()
+        root = _tmp_tree({"leak.txt": leaked})
         return Context(
             root,
             tracked=lambda: ["leak.txt"],
+            tree_files=lambda: {"leak.txt": leaked.encode("utf-8")},
             git=lambda *args: "real.person@example.com\n",
         )
 
@@ -1098,7 +1104,12 @@ def _mutation_worlds() -> List[Mutation]:
                 "bench/scenarios/s01/sessions/a.jsonl": "{}\n",
             }
         )
-        return Context(root, tracked=lambda: list(tracked))
+        files = {
+            name: (root / name).read_bytes()
+            for name in tracked
+            if (root / name).is_file()
+        }
+        return Context(root, tracked=lambda: list(tracked), tree_files=lambda: dict(files))
 
     def c09() -> Context:
         members = {"README.md": b"x\n", "pyproject.toml": b"", "LICENSE": b"MIT\n"}
@@ -1212,7 +1223,8 @@ def _mutation_worlds() -> List[Mutation]:
         def passthrough(src, dst):
             shutil.copyfile(str(src), str(dst))
 
-        return Context(REPO_ROOT, tree_ref=lambda: "HEAD", normalize_archive=lambda: passthrough)
+        # C11 必须真建两次 sdist，而构建要一个 git 仓库；用仓库自身（HEAD）但**只换归一函数**。
+        return Context(REPO_ROOT, tree_ref=lambda: "HEAD", normalize_archive=passthrough)
 
     return [
         Mutation("R01", "C01", "工作树脏 → C01 必红", c01),
@@ -1294,18 +1306,31 @@ def run_mutation(verbose: bool = True) -> int:
         func = by_id.get(mutation.check_id)
         if func is None:
             continue
+        # ⚠️ 三种结局必须分开：「被检查打红」（真抓到）、「检查无法执行」（环境缺失 → 既不算抓到
+        # 也不算漏报，必须显式报成 inconclusive）、「检查自身炸了」（同样不算抓到）。
+        # 首版把三者混成 `problems = [...]` 再取 bool，于是"环境缺失"会被打印成 CAUGHT——
+        # 那是变异验证里最坏的一种假绿（本机复核时发现）。
+        caught = False
+        inconclusive = ""
         try:
             problems = func(mutation.build())
+            caught = bool(problems)
         except EnvironmentMissing as exc:
-            problems = ["变异世界触发环境缺失（这不算被打红）：%s" % exc]
+            inconclusive = "变异世界触发环境缺失：%s" % exc
         except ReleaseNotAchieved as exc:
+            caught = True
             problems = [str(exc)]
         except Exception as exc:  # 变异世界构造失败也要报，不能当成"抓到了"
-            problems = ["变异世界自身异常（这不算被打红）：%r" % exc]
-        caught = bool(problems)
+            inconclusive = "变异世界自身异常：%r" % exc
         if verbose:
-            print("[%s] %s → %s（%s）" % ("CAUGHT" if caught else "MISSED", mutation.ident, mutation.check_id, mutation.note))
-        if not caught:
+            verdict = "CAUGHT" if caught else ("INCONCLUSIVE" if inconclusive else "MISSED")
+            print("[%s] %s → %s（%s）" % (verdict, mutation.ident, mutation.check_id, mutation.note))
+        if inconclusive:
+            failures.append(
+                "%s 的变异 %s 无法判定（%s）：环境缺失/构造失败都不能算「被抓到」"
+                % (mutation.check_id, mutation.ident, inconclusive)
+            )
+        elif not caught:
             failures.append("%s 未被 %s 抓到：该项检查是假门" % (mutation.check_id, mutation.ident))
 
     if failures:
