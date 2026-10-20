@@ -1,7 +1,8 @@
 name: ci
 
-# 四矩阵：windows / ubuntu × Python 3.8 / 3.12。
-# 3.8 是项目底线（自写受限 TOML 子集解析器的原因就在这条版本线上）；3.12 是当前主用版本。
+# 双矩阵：windows / ubuntu × Python 3.12。
+# 3.8 是项目起点（自写受限 TOML 子集解析器最初就是为这条版本线写的），但它已于 2024-10-07
+# EOL；3.12 是当前底线（支持到 2028-10-31），也是本项目的唯一承诺版本。
 on:
   push:
   pull_request:
@@ -15,22 +16,22 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python: ["3.8", "3.12"]
+        python: ["3.12"]
     env:
       # 编码三加固之二（另外两层在代码里）：CI 全部步骤统一 utf-8，
       # 否则 `python -m pytest` 打印中文即 UnicodeEncodeError（管道是 cp1252 时）。
       PYTHONUTF8: "1"
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
 
       - name: 安装（与 README 快速开始同一 extras 集合）
         run: |
-          python -m pip install --upgrade "setuptools>=61" wheel
+          python -m pip install --upgrade "setuptools>=77" wheel
           python -m pip install -e ".[dev]"
 
       - name: 全量测试

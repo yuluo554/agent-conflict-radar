@@ -97,6 +97,11 @@ data/**/_real/
 # M2 起追加：意图矩阵的会话日志同理（同一套白名单纪律、同一套 `--check` 断言）。
 !bench/intents/*/sessions/
 
+# 迭代交接物（诊断报告 / 迭代路线 / 执行记录）：**不进任何门禁判据**。
+# 发布门 C01 的判据就是 `git status --porcelain`——交接目录一旦出现在状态里，
+# 后面每一批的门输出都会带一条噪声 FAIL（本仓实测）。交接物不需要入仓。
+update/
+
 # 系统文件
 Thumbs.db
 Desktop.ini

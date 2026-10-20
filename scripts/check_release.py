@@ -28,7 +28,9 @@ Release"的注定失败的门，于是只能被跳过或被放宽——那是假
 * **K7**：留档里的时间是**真实 UTC 时刻**（事件记录，不是产物判定）；这是本脚本唯一读系统时钟
   的地方。
 * **K17**：发布附件与 tag 树逐字节同源；zip/tar 内**不写自身 sha256**（自指必过期）——sha256
-  只写进 `plan/release-assets.json`，而它是在 **tag 之后**的追加提交里落地的。
+  只写进 `plan/release-assets.json`。该文件**不在 sdist 内**（`MANIFEST.in` 只收 `plan *.md`），
+  所以它可以在 **tag 之前**入库：加了它不会改变包的字节（`--build-asset` 前后各建一次可当场核对），
+  于是"发布物自证"不需要放宽任何判据。
 """
 
 import argparse
@@ -74,7 +76,8 @@ EXIT_MISSING_ENV = EXIT_ENVIRONMENT
 CANONICAL_SLUG = "yuluo554/agent-conflict-radar"
 CANONICAL_NAME = "agent-conflict-radar"
 
-#: 附件登记文件（**tag 之后**的追加提交落地；因此不进 tag 树内的源码包，也就没有自指问题）。
+#: 附件登记文件。**不在 sdist 内**（MANIFEST 只收 `plan *.md`），因此可以在 **tag 之前**入库：
+#: 这样 tag 树自带登记，O05/O06/O07 在发布物自身里才成立；而包字节不受影响（不含本文件）。
 ASSET_LEDGER_RELPATH = "plan/release-assets.json"
 
 #: 运行产物：不入源码包（与 `bench.gen.RUNTIME_PRODUCTS` 同源）。
@@ -1103,6 +1106,71 @@ def check_assets_sha256_recomputed(ctx: Context) -> List[str]:
     return failures
 
 
+#: README 里的**机读条数锚**：`release-gate-counts offline=<n> online=<n> mutations=<n>`。
+#: 为什么要有它：M6 发布物的 README 曾写"离线 10 条 + 在线 6 条"（=16），同一页又写
+#: "18 组变异"——16 ≠ 18 自相矛盾，而**没有任何判据**把这两个数字钉住。文档里的条数必须由
+#: 代码对账，否则"改门必须同步改文档"只是注释里的君子协定。
+_GATE_COUNTS_ANCHOR_RE = re.compile(
+    r"release-gate-counts\s+offline=(\d+)\s+online=(\d+)\s+mutations=(\d+)"
+)
+
+#: README 里的检查编号区间（`离线 C01–C… / 在线 O01–O…`）：读者据此知道"该跑几条"。
+_GATE_RANGE_RE = re.compile(r"离线\s*C01[–-]C(\d+)\s*/\s*在线\s*O01[–-]O(\d+)")
+
+
+def documented_gate_counts(text: str) -> Optional[Dict[str, int]]:
+    """从 README 文本里抽出发布门的登记条数；抽不到返回 `None`（= 锚缺席，不是"零条"）。"""
+    match = _GATE_COUNTS_ANCHOR_RE.search(text)
+    if not match:
+        return None
+    return {
+        "offline": int(match.group(1)),
+        "online": int(match.group(2)),
+        "mutations": int(match.group(3)),
+    }
+
+
+def check_documented_gate_counts(ctx: Context) -> List[str]:
+    """C12 文档登记的发布门条数 == 检查表实际条数（数字不靠人记）。
+
+    判据落在**代码算出来的** `len(OFFLINE_CHECKS)` / `len(ONLINE_CHECKS)` / `len(_mutation_worlds())`
+    上，而不是"文档里那个数字看起来合理"。顺带把编号区间也对齐：区间写"到 C11"而表里已有 C12，
+    同样是"读者照文档跑会少跑一条"。
+    """
+    readme = ctx.read("README.md")
+    declared = documented_gate_counts(readme)
+    if declared is None:
+        return [
+            "README 缺少机读条数锚 `release-gate-counts offline=… online=… mutations=…`："
+            "文档里的条数必须能被代码核对（否则改门后文档必然漂移）"
+        ]
+    actual = {
+        "offline": len(OFFLINE_CHECKS),
+        "online": len(ONLINE_CHECKS),
+        "mutations": len(_mutation_worlds()),
+    }
+    failures = [
+        "登记 %s=%d ≠ 检查表实际 %d" % (key, declared[key], actual[key])
+        for key in ("offline", "online", "mutations")
+        if declared[key] != actual[key]
+    ]
+    ranges = _GATE_RANGE_RE.search(readme)
+    if ranges is None:
+        failures.append(
+            "README 缺少检查编号区间 `离线 C01–C… / 在线 O01–O…`：读者据此知道该跑几条"
+        )
+    else:
+        if int(ranges.group(1)) != actual["offline"]:
+            failures.append(
+                "README 的离线区间写到 C%s ≠ 实际 %d 条" % (ranges.group(1), actual["offline"])
+            )
+        if int(ranges.group(2)) != actual["online"]:
+            failures.append(
+                "README 的在线区间写到 O%s ≠ 实际 %d 条" % (ranges.group(2), actual["online"])
+            )
+    return failures
+
+
 OFFLINE_CHECKS: List[Tuple[str, str, Callable[[Context], List[str]]]] = [
     ("C01", "工作树 = 历史（无未提交改动）", check_worktree_clean),
     ("C02", "跟踪面不含运行/构建产物", check_no_ignored_artifacts),
@@ -1115,6 +1183,7 @@ OFFLINE_CHECKS: List[Tuple[str, str, Callable[[Context], List[str]]]] = [
     ("C09", "真建 sdist 并逐条核对内容", check_sdist_contents),
     ("C10", "解包即用（从解包目录之外跑 CLI）", check_extracted_self_sufficient),
     ("C11", "发布件可复现（同 ref 两次构建逐字节相同）", check_asset_build_is_deterministic),
+    ("C12", "文档登记的发布门条数与检查表一致", check_documented_gate_counts),
 ]
 
 ONLINE_CHECKS: List[Tuple[str, str, Callable[[Context], List[str]]]] = [
@@ -1162,7 +1231,7 @@ class Mutation(object):
 
 
 def _mutation_worlds() -> List[Mutation]:
-    """16 条变异——每条对应一条检查项（`run_mutation` 断言数量相等）。"""
+    """19 条变异——每条对应一条检查项（`run_mutation` 断言数量相等）。"""
 
     def c01() -> Context:
         root = _tmp_git_repo({"README.md": "x\n"})
@@ -1344,6 +1413,11 @@ def _mutation_worlds() -> List[Mutation]:
         # C11 必须真建两次 sdist，而构建要一个 git 仓库；用仓库自身（HEAD）但**只换归一函数**。
         return Context(REPO_ROOT, tree_ref=lambda: "HEAD", normalize_archive=passthrough)
 
+    def c12() -> Context:
+        # README 的机读锚写成与实际条数不符（离线 1 / 在线 1 / 变异 1）→ C12 必红。
+        readme = "release-gate-counts offline=1 online=1 mutations=1\n离线 C01–C1 / 在线 O01–O1\n"
+        return Context(_tmp_tree({}), read=lambda rel: readme if rel == "README.md" else "")
+
     return [
         Mutation("R01", "C01", "工作树脏 → C01 必红", c01),
         Mutation("R02", "C02", "跟踪面含 out/ → C02 必红", c02),
@@ -1363,6 +1437,7 @@ def _mutation_worlds() -> List[Mutation]:
         Mutation("R16", "O06", "下载内容与 sha256 不符 → O06 必红", o06),
         Mutation("R17", "O07", "附件内容与 tag 树不一致 → O07 必红", o07),
         Mutation("R18", "C11", "归档归一被去掉（同 ref 两次构建不同）→ C11 必红", c11),
+        Mutation("R19", "C12", "README 条数锚与实际不符 → C12 必红", c12),
     ]
 
 
@@ -1593,7 +1668,10 @@ def build_asset(dest_dir: Path, tag: str, root: Path) -> int:
 def record_assets(local_dir: Path, tag: str, slug: str, root: Path) -> int:
     """把本地附件副本的 sha256 记进 `plan/release-assets.json`（K2 原子写）。
 
-    这是**唯一的写盘点**，且在 **tag 之后**运行——zip/tar 内不写自身 sha256（K17 自指必过期）。
+    这是**唯一的写盘点**。顺序是 **tag 之前**入库（登记 → 提交 → 打 tag）：
+    登记文件不在 sdist 内，所以它进树不改变包字节——而 tag 树自带登记，
+    O05/O06/O07 三条"发布物自证"检查才可能成立（v0.0.1 时是反的，实测 4 FAIL）。
+    zip/tar 内仍不写自身 sha256（K17 自指必过期）。
     """
     local_dir = Path(local_dir)
     if not local_dir.is_dir():
@@ -1611,7 +1689,8 @@ def record_assets(local_dir: Path, tag: str, slug: str, root: Path) -> int:
         "repository": slug,
         "recorded_at": Context(root).now_utc(),
         "note": (
-            "发布附件登记（tag 之后追加）。zip/tar 内不写自身 sha256：自指必过期（K17）。"
+            "发布附件登记（**tag 之前**入库；本文件不在 sdist 内，故不改变包字节）。"
+            "zip/tar 内不写自身 sha256：自指必过期（K17）。"
             "本文件由 scripts/check_release.py --record-assets 生成，经 serialize.write_atomic 落盘（K2）。"
         ),
         "assets": assets,

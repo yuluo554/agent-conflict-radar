@@ -3,8 +3,10 @@
 > **本文件的使用纪律（DoD ③）**
 >
 > * 本文件在 **tag 之前**写好并提交，**进 tag 树**；它描述的是"发布这一刻的事实与判定口径"。
-> * tag 之后才产生的事实（附件 sha256、真下载复核、CI run id、失败轮次）**一律追加在文末
->   「§八 tag 后追加事实」**，**不覆盖**本文件 §一–§七 的内容。
+> * tag 之后才产生的事实（附件 sha256、真下载复核、CI run id、失败轮次）**一律追加在文末追加事实节**，
+>   **不覆盖**本文件 §一–§七 的内容。
+>   * **§八 = `v0.0.1` 的 tag 后事实（历史照录，不删不改）**；
+>   * **§九 = `v0.0.2` 的 tag 后事实**（本迭代新增；它同时是"发布物自证"这条缺陷的修复记录）。
 > * 时间一律写**真实 UTC 时刻**（K7：这是事件记录，不是产物判定）。
 > * 本文件**不含**发布附件自身的 sha256——那是 tag 之后的事实，且写进源码包会造成自指
 >   （下次构建的字节会变，sha256 必然过期，K17）。附件登记落在 `plan/release-assets.json`。
@@ -17,12 +19,13 @@
 |---|---|
 | 仓库 | `yuluo554/agent-conflict-radar`（公开） |
 | 包名 / 导入名 | `agent-conflict-radar` / `agent_conflict_radar` |
-| 版本 | `0.0.1`（`src/agent_conflict_radar/__init__.py` 的 `__version__` 是唯一来源） |
-| 许可 | MIT（`LICENSE` 文件 + `pyproject.toml` 的 `license` 元数据） |
-| 运行时依赖 | **零**（`dependencies = []`）；dev extra 只有 `pytest` |
-| 底线解释器 | Python **3.8**（自写受限 TOML 子集解析器的原因）；主用 3.12 |
+| 版本 | `0.0.2`（`src/agent_conflict_radar/__init__.py` 的 `__version__` 是唯一来源） |
+| 许可 | MIT（`LICENSE` 文件 + `pyproject.toml` 的 `license = "MIT"` + `license-files`，PEP 639 形态） |
+| 运行时依赖 | **零**（`dependencies = []`）；dev extra = `pytest` + `build` + `wheel` |
+| 底线解释器 | Python **3.12**（3.8 已于 2024-10-07 EOL，本迭代抬地板：`requires-python` + classifier + CI 矩阵 + README 四处同口径） |
 | 命令面 | **7/7**：`config` / `selftest` / `scan` / `intent` / `detect` / `report` / `bench` |
 | 退出码 | 只有 `0/1/2/3`（K1） |
+| 附录 | `v0.0.1` 的发布坐标是 **0.0.1 / Python 3.8 / 许可 TOML 表形态**——见 §八「v0.0.1 tag 后追加事实」（历史照录，不覆盖） |
 
 **名字四向一致**（K14，发布前并排读一遍）：README H1 含 `agent-conflict-radar`；
 GitHub 仓库名 `agent-conflict-radar`；`pyproject.toml` 的 `name = "agent-conflict-radar"`；
@@ -37,9 +40,9 @@ GitHub 仓库名 `agent-conflict-radar`；`pyproject.toml` 的 `name = "agent-co
 
 | 模式 | 判据 |
 |---|---|
-| 默认（离线） | C01–C11：工作树干净 / 无运行产物入库 / 名字四向 / 退出码冻结 / 矩阵自检 / 矩阵机器无关 / 提交面脱敏 / MANIFEST 覆盖 / **真建 sdist 核对** / **解包即用** / **发布件可复现**（同 ref 两次构建逐字节相同） |
+| 默认（离线） | C01–C12：工作树干净 / 无运行产物入库 / 名字四向 / 退出码冻结 / 矩阵自检 / 矩阵机器无关 / 提交面脱敏 / MANIFEST 覆盖 / **真建 sdist 核对** / **解包即用** / **发布件可复现**（同 ref 两次构建逐字节相同） / **文档条数与检查表对账**（C12：README 的机读锚 == 本表实际条数） |
 | `--online` | O01–O07：仓库公开 / annotated tag 指向发布提交 / CI **逐 job** 全 success / push 事件与 run 对账 / 附件集合与登记一致 / **逐个下载复算 sha256** / **附件与 tag 树逐字节同源** |
-| `--mutation` | 门自身的可证伪性：**检查项数 == 变异组数**（18 ↔ 18），每条检查必须被对应变异打红 |
+| `--mutation` | 门自身的可证伪性：**检查项数 == 变异组数**（当前 19 ↔ 19，`v0.0.1` 时为 18 ↔ 18），每条检查必须被对应变异打红 |
 
 退出码沿用 `radar` 的四语义：`0` 全过 / `1` 有 FAIL / `2` 用法错误 / `3` 依赖缺失（gh、build、git）。
 **不新增第五个码**（K1）。
@@ -72,24 +75,26 @@ GitHub 仓库名 `agent-conflict-radar`；`pyproject.toml` 的 `name = "agent-co
 ## 四、发布步骤与顺序（顺序本身是判据）
 
 ```text
-1. 本地全绿（双解释器 pytest / 离线冒烟 --strict / bench 全矩阵 / gen --check / mutation）
+1. 本地全绿（pytest / 离线冒烟 --strict / bench 全矩阵 / gen --check / mutation / 发布门离线 + 变异）
 2. 脱敏复查（入库内容 + 提交元数据邮箱）
-3. 提交 M6 交付物（MANIFEST.in / scripts/check_release.py / 本文件）
-4. 跑离线发布门：scripts/check_release.py          → 必须 0 FAIL
-5. 建仓：gh repo create yuluo554/agent-conflict-radar --public
-6. push main                                     → CI 首跑（**失败照录**）
-7. CI 绿 → 打 annotated tag（version_tag）→ push tag → tag push 触发一条 run
-8. `scripts/check_release.py --build-asset dist/release --tag <tag>` 建出源码包
-   （走 `git archive <tag>` → 受控树 → sdist → 归档归一，与门 C09/O07/C11 同一条路径）
-   → 手工上传为 Release 附件（**不得**用仓库 zipball 替代）
-9. 本地留同名副本 → --record-assets 生成 plan/release-assets.json → **追加提交** push
-10. 远端正下载复核：scripts/check_release.py --online --tag <tag>   → 必须 0 FAIL
-11. 中立目录解包跑 selftest（"解压即用"实证）
-12. 本文件 §八 追加事实 → 追加提交 push
+3. **从候选树建 sdist**：scripts/check_release.py --build-asset dist/release --tag <候选 ref>
+   → 记下 sha256（记为 A）与字节数（该树**尚未**含附件登记文件）
+4. **写附件登记**：--record-assets dist/release --tag <新 tag> → plan/release-assets.json
+   （经 serialize.write_atomic 落盘，K2）
+5. **提交登记文件** → 再打 annotated tag（tag 树从此**含**登记文件）
+6. **从新 tag 树再建一次 sdist**，断言 sha256 == A ← 证明"登记入库没有改变包"
+7. push tag → tag push 触发一条 run（CI 必须绿）
+8. 远端正下载复核：scripts/check_release.py --online --tag <tag>   → 必须 0 FAIL
+9. 手工上传附件（**不得**用仓库 zipball 替代）；中立目录解包跑一次 CLI（"解压即用"实证）
+10. 本文件 §九 追加 tag 后事实 → 追加提交 push
 ```
 
-**为什么 ⑧ 必须在 ⑦ 之后**：附件必须与 tag 树**逐字节同源**。先打 tag 再建包，才能保证
-"包 = tag 树的内容"；反过来先建包再打 tag，中间任何一次提交都会让两者分叉。
+**为什么 ③–⑥ 是这个顺序（`v0.0.1` 时是反的）**：附件必须与 tag 树**逐字节同源**，而
+`v0.0.1` 的登记文件是 tag **之后**的追加提交，于是 O05/O06/O07 在发布物自身里**必然 FAIL**
+（"下载到包的人照着 README 跑同一份门，得到 4 FAIL"）。修正的依据是一次实测：
+`plan/release-assets.json` **不在 sdist 内**（`tar -tzf dist/*.tar.gz | grep -c release-assets` → **0**，
+`MANIFEST.in` 只收 `plan *.md`）——所以"先把登记写进树、再打 tag"**不会改变包的字节**（第 ⑥ 步当场断言），
+自指/鸡生蛋的顾虑用**流程顺序**解决，**不需要**把 O05/O06/O07 降级成 WARN/SKIP。
 
 ---
 
@@ -119,8 +124,8 @@ GitHub 仓库名 `agent-conflict-radar`；`pyproject.toml` 的 `name = "agent-co
 | `radar bench`（整矩阵） | 15/15 场景、174 项检查、exit 0 |
 | `python -m agent_conflict_radar.bench.gen --check` | 两层断言 + 提交 sha 复算全过，exit 0 |
 | `tools/verify_mutation.py` | 36 组变异全部被抓到（M5 口径） |
-| `scripts/check_release.py` | 离线 11 条无 FAIL |
-| `scripts/check_release.py --mutation` | 18 条检查 ↔ 18 条变异，逐条被打红 |
+| `scripts/check_release.py` | 离线 **无 FAIL**（当轮条数以门输出为准） |
+| `scripts/check_release.py --mutation` | **检查项数 == 变异组数**，逐条被打红（当轮 19 ↔ 19） |
 | `scripts/check_release.py --build-asset` | 同一 ref 连跑两次 sha256 相同（发布件可复现） |
 
 ---
@@ -239,3 +244,49 @@ tag `v0.0.1` **仍指向 `ded85f8`**。以下内容都是 tag 之后在 `main` �
 
 **核验"包未变"**：`--build-asset --tag v0.0.1` 仍然只读 tag 树，重算 sha256 仍为
 `f19688f1…47ab`（门 C11 与 O07 都对着这条断言）。发布门的修正只改**判据**，不改**产物**。
+
+---
+
+## 九、`v0.0.2` 的 tag 后追加事实
+
+> ⚠️ 本节与 §八 同一纪律：**只在 tag 之后追加**，不改上文任何内容。
+> **未发布前本节只写"tag 前已固定的事实"与"待追加清单"**——不许先写好 run id / 附件 sha256 再发布
+> （那正是这次要修的形态：文档声称的东西没人核对）。
+
+### 9.1 为什么会有这次发布（tag 前已固定的事实）
+
+`v0.0.1` **已被发布，且不可变**。它的附件下载下来能直接看到一处硬伤：
+把 tag 树 clone 出来跑**它自带的**发布门，得到的是 **4 FAIL / exit 1**
+（`python scripts/check_release.py --online --tag v0.0.1` → O04 / O05 / O06 / O07）。
+根因两条，都在 tag 之后才修好：
+
+1. **O04 的计数口径**（tag 树那版把 branch push 的**全历史** run 拿来对账）→ 已由 `f953821` 修好；
+2. **附件登记文件在 tag 树里不存在**（它是 tag 之后的追加提交），而 O05/O06/O07 都依赖它
+   → 这三条在发布物自身里**必然 FAIL**。
+
+第 2 条是**流程缺陷，不是判据缺陷**：实测 `plan/release-assets.json` **不在 sdist 内**
+（`tar -tzf dist/*.tar.gz | grep -c release-assets` → **0**），所以把登记放到 **tag 之前**入库
+**不会改变包的字节**。`v0.0.2` 因此把顺序改成 §四 的 ③–⑥，并用"If 登记入库前后两次 sdist 的
+sha256 相同"当场证明它不影响包体——**没有**把任何 FAIL 降级成 WARN/SKIP。
+
+### 9.2 `v0.0.2` 相对 `v0.0.1` 的变更（tag 前）
+
+| 类别 | 变更 |
+|---|---|
+| 流程（核心） | 附件登记**先进树再打 tag**；tag 树因此自带 `plan/release-assets.json` |
+| 门 | 新增第 12 条离线检查 **C12**（文档登记的条数 == 检查表实际条数）+ 对应变异组 → `--mutation` 由 18↔18 变 **19↔19** |
+| 测试 | `tests/test_readme_gate.py` 新增**第六面**（README 机读锚 ↔ 检查表），含抽取器非空/可证伪自证；并与门的 C12 **共用同一解析器** |
+| 文档 | README 加机读条数锚 `release-gate-counts offline=12 online=7 mutations=19`；`plan/06` 的陈旧读数（"10 条无 FAIL"）改为引用门输出；`plan/00`/`plan/07`/`plan/RELEASE-M6` 的条数改"以门输出为准" |
+| 平台 | 地板 3.8 → **3.12**（`requires-python` + classifier + CI 矩阵 + README 四处同口径）；CI actions `checkout@v7` / `setup-python@v7`（注解清零的目标） |
+| 打包 | PEP 639：`license = "MIT"` + `license-files = ["LICENSE"]`，删 `License ::` classifier，`setuptools>=77`（`wheel` **保留**） |
+| 数据台账 | `data/README.md` 补机读复核锚 `next_review: 2027-01-17`（只加锚，不改既有数字） |
+| 交接 | `.gitignore` 加 `update/`（交接目录不再让 C01 变红） |
+
+### 9.3 待追加（tag 之后按真实 UTC 补齐）
+
+- [ ] 发布提交 sha 与 annotated tag 对象（`git cat-file -t v0.0.2` = `tag`）
+- [ ] `v0.0.2` 的 branch push run 与 tag push run（run id + 时刻 + 结论；含注解条数）
+- [ ] 附件 `agent_conflict_radar-0.0.2.tar.gz` 的字节数与 sha256（只写这里/Release 说明/登记文件，**不写进包内**）
+- [ ] `scripts/check_release.py --online --tag v0.0.2` 的结果（离线 + 在线全条数、exit 码）
+- [ ] **发布物视角复验**：`git clone --branch v0.0.2` 后跑**该树自带**的门 → 期望 0 FAIL
+- [ ] 中立目录解包跑 CLI（解压即用实证）

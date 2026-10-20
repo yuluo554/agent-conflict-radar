@@ -26,7 +26,7 @@ class ConfigError(RadarError):
 
 
 class TomlUnsupportedError(ConfigError):
-    """TOML 超集形态：底线解释器 3.8 无 tomllib，自写子集解析器遇到不支持的形态必须显式报错。
+    """TOML 超集形态：自写受限子集解析器（项目起步于 3.8，当时无 `tomllib`）遇到不支持的形态必须显式报错。
 
     静默跳过会让配置里的数值**凭空消失**（K6）。错误信息必须带行号与形态描述。
     """

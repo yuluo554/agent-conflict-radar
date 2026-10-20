@@ -6,17 +6,21 @@
 
 ---
 
-## ✅ 已发布：v0.0.1（2026-10-18），命令面 7/7
+## ✅ 已发布：v0.0.2（2026-10-20），命令面 7/7
 
 七条命令全部落地，合成冲突矩阵与意图矩阵已入仓可审计，`radar bench` 可**一键复跑评分**。
 
-**发布物**：[Release v0.0.1](https://github.com/yuluo554/agent-conflict-radar/releases/tag/v0.0.1)
-附**手工上传**的源码包 `agent_conflict_radar-0.0.1.tar.gz`
-（sha256 `f19688f1d6338b2adc3455bcc3b216e0c0633fda1eafa73da0598ddfa14347ab`，登记在
-`plan/release-assets.json`）。CI 四矩阵 `windows/ubuntu × 3.8/3.12` 全绿。
+**发布物**：[Release v0.0.2](https://github.com/yuluo554/agent-conflict-radar/releases/tag/v0.0.2)
+附**手工上传**的源码包 `agent_conflict_radar-0.0.2.tar.gz`。sha256 **不写进包内**（自指必过期，K17）：
+数值见该 Release 说明与 `plan/release-assets.json`——该文件在 **tag 之前**入库（它不在源码包里，
+所以进树**不改变包字节**），这正是"从 tag 树 clone 出来跑门也 0 FAIL"的前提。
+CI：双矩阵 `windows/ubuntu × 3.12`（3.8 已 EOL 退役）；索引见「开发与测试」一节。
 
-`scripts/check_release.py` 是**发布终态自检门**（离线 C01–C11 / 在线 O01–O07，刻意不进 CI），
-总共 18 条检查、18 组门自身变异（**检查项数 == 变异组数**），发布时 `--online` 无 FAIL。
+`scripts/check_release.py` 是**发布终态自检门**（离线 C01–C12 / 在线 O01–O07，刻意不进 CI）。
+下面这行是**机读条数锚**：`release-gate-counts offline=12 online=7 mutations=19`——离线 12 条 +
+在线 7 条 = **19 条检查**，门自身变异 **19 组**（**检查项数 == 变异组数**）。
+这组数字由门自己的 **C12** 与 `tests/test_readme_gate.py` 的第六面双向对账：改检查表而不同步这里
+→ 门红、测试红。发布时 `--online` 无 FAIL **是在 tag 树里跑同一份门验出来的**（发布物自证）。
 
 | 命令 | 状态 | 计划里程碑 |
 |---|---|---|
@@ -51,7 +55,7 @@ M5 起**没有"阶段未就绪"这第五条退出码**：`4` 随最后一条命�
 ## 三分钟上手
 
 ```bash
-# 1) 安装（零运行时依赖，秒装；dev extra 只含测试期依赖 pytest，外加发布门真建 sdist 用的 build）
+# 1) 安装（零运行时依赖，秒装；dev extra = pytest + build + wheel，只在开发/发布期用）
 python -m pip install -e ".[dev]"
 
 # 2) 看生效配置：确认所有数值只有一个来源
@@ -274,7 +278,7 @@ radar report --repo . --format md            # 只打人读 Markdown
 
 ## 已知环境问题
 
-* **配置文件解析用自写受限 TOML 子集解析器**（项目底线 Python 3.8 没有 `tomllib`）。支持：注释、`[section]`、`key = 整数/浮点/布尔/带引号字符串/标量数组`。**不支持**：表数组 `[[...]]`、内联表 `{...}`、多行字符串、点号键——遇到即在**报错信息里点名行号**（不静默跳过）。
+* **配置文件解析用自写受限 TOML 子集解析器**（不依赖 `tomllib`：本仓起步于 3.8，且自写子集能对不支持的形态给出**带行号**的显式报错）。支持：注释、`[section]`、`key = 整数/浮点/布尔/带引号字符串/标量数组`。**不支持**：表数组 `[[...]]`、内联表 `{...}`、多行字符串、点号键——遇到即在**报错信息里点名行号**（不静默跳过）。
 * **`radar bench` 默认在仓库根的 `bench/` 找合成矩阵**；源码包/解包后目录不同时请显式传 `--bench-dir`。默认把 `last_run.json` 落回**矩阵目录**（给 `--out-dir` 则落那里）。
 * **Windows 路径**：一律用参数传路径，不要依赖 shell 的 `~` 展开（Git Bash 的 `~` 与 Windows Python 不互通）；`~` 解不出主目录时本工具**显式报错**，不会在当前位置创建名为 `~` 的目录。
 * **`radar` 与 `python -m agent_conflict_radar` 是两条通路**（`sys.path` 来源不同）：前者要求已安装，后者在源码态配 `PYTHONPATH=src` 也可跑。CI 对两条都冒烟。
@@ -295,18 +299,29 @@ python tools/verify_mutation.py     # 守门变异验证（新增/改写守门�
 （CI 每棒必跑），`python -m agent_conflict_radar.bench.gen --out bench` 在改生成器/体例后整目录重建，
 `--materialize <id> --dest <dir>` 把某条场景物化成真 git 仓库（供 M2/M3 用）。
 
-CI：`.github/workflows/ci.yml`，四矩阵 `windows/ubuntu × Python 3.8/3.12`（每腿依次跑全量测试 → 矩阵自检 → 离线冒烟）。
+CI：`.github/workflows/ci.yml`，双矩阵 `windows/ubuntu × Python 3.12`（每腿依次跑全量测试 → 矩阵自检 → 离线冒烟）。`requires-python`、classifier、CI 矩阵、本节四处同一口径：**地板 = 3.12**（3.8 已 EOL，不再承诺）。当前矩阵的最近一次全绿 run 与时刻在下方「CI 索引」。
 
 ### 发布终态自检（`scripts/check_release.py`，**刻意不进 CI**）
 
 ```bash
-python scripts/check_release.py            # 离线 C01–C11：工作树/产物/名字四向/退出码/矩阵/脱敏/MANIFEST/真建 sdist/解包即用
-python scripts/check_release.py --online --tag v0.0.1   # 在线 O01–O07：公开/tag 指向/CI 逐 job/附件集合/逐个下载复算 sha256/附件与 tag 树同源
+python scripts/check_release.py            # 离线 C01–C12：工作树/产物/名字四向/退出码/矩阵/脱敏/MANIFEST/真建 sdist/解包即用/可复现/文档条数对账
+python scripts/check_release.py --online --tag v0.0.2   # 在线 O01–O07：公开/tag 指向/CI 逐 job/附件集合/逐个下载复算 sha256/附件与 tag 树同源
 python scripts/check_release.py --mutation # 门自身变异验证：检查项数 == 变异组数
 ```
 
 为什么不在 CI：它判的是"发布这件事做完了没有"（仓库公开、tag、CI 已绿、附件已传），这些状态
 只在发布时才存在——放进 CI 只能被跳过或被放宽，那就是假门。退出码沿用 `0/1/2/3`，不新增第五个码。
+
+**CI 索引**（"全绿"必须带索引，否则会被读成"当前成立"）：
+
+| 项 | 值 |
+|---|---|
+| workflow | `.github/workflows/ci.yml`，双矩阵 `windows-latest` / `ubuntu-latest` × Python `3.12` |
+| 上一次全绿（**旧矩阵** `×3.8/3.12`，2026-10-18） | run `39113500854`（`main`@`dc68fab`，2026-10-18T08:58:24Z，四腿 success） |
+| 本矩阵（`×3.12`）的首轮 | 本轮改动推送后触发；run id / 时刻 / 注解条数按真实 UTC 追加在 `plan/RELEASE-M6.md` §九 |
+
+> 历史事实（不改写）：`ubuntu-latest` 自 **2026-10-19** 起迁移到 Ubuntu 26，此前所有 run 跑的都是旧镜像；
+> 迁移后**必须**看一次新 run 才能说"当前矩阵全绿"。
 
 **计划文档**（读完 README 想知道"为什么这么设计"就看这里）：
 

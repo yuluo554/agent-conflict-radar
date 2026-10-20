@@ -4,14 +4,16 @@
 README 里写的命令**长期无人校验**，实测过的两类真缺陷正是这样潜伏的：
 README 审计命令的路径多了一层不存在的目录；`python -m <pkg>` 缺 `__main__.py` 导致每条命令都报错。
 
-五个面：
+六个面：
 
 1. **README 命令 → CLI parser**（逐行关联旗标到子命令，防"旗标写在错的命令行上"的张冠李戴）；
 2. **CLI 子命令 → README 反向覆盖**（命令总表不得漏掉已注册命令）；
 3. **tests/ 与 src/ 的 import → 冻结标准库名单 / dev extra / 本包**（`sys.stdlib_module_names`
    是 3.10+ 才有的 API，底线解释器上取到空集会把每个标准库判成第三方 → 全量假红，故用冻结名单）；
 4. **README 的 extras ↔ pyproject 声明双向**；
-5. **包布局 ↔ 打包配置**（`package-dir` 解析结果必须真实存在；不得有"包外顶层目录"被 import）。
+5. **包布局 ↔ 打包配置**（`package-dir` 解析结果必须真实存在；不得有"包外顶层目录"被 import）；
+6. **README 登记的发布门条数 ↔ 检查表实际条数**（`release-gate-counts` 机读锚 + 编号区间）；
+   解析器与发布门的 **C12** 共用一份实现——否则"文档 ↔ 测试 ↔ 门"会各说一套。
 """
 
 import ast
@@ -434,3 +436,65 @@ def test_readme_command_lines_extractor_is_not_vacuous(repo_root):
     assert len(commands) >= 5, "只抽出 %d 条命令：抽取器可能把文本切坏了" % len(commands)
     staged = [command for command in commands if command.startswith("radar bench")]
     assert staged, "README 应给出 `radar bench` 的用法示例（M5 招牌命令）"
+
+
+# --------------------------------------------------------------------------------------
+# 面 6：README 登记的发布门条数 ↔ 检查表实际条数
+# --------------------------------------------------------------------------------------
+
+
+def _load_release_gate():
+    """按路径加载 `scripts/check_release.py`（它不是包的一部分，不能按名字 import）。
+
+    这里**不复制解析器**：条数对账用的就是发布门 C12 的同一个函数——否则"文档 ↔ 测试 ↔ 门"
+    会各说一套，而这条判据存在的理由正是"数字只有一个来源"。
+    """
+    import importlib.util
+    import sys
+
+    path = Path(__file__).resolve().parent.parent / "scripts" / "check_release.py"
+    assert path.is_file(), "缺少发布门 scripts/check_release.py（M6 交付物）"
+    name = "radar_check_release_readme_face"
+    spec = importlib.util.spec_from_file_location(name, str(path))
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_release_gate_counts_are_reconciled(repo_root, readme_text):
+    """面 6：README 的机读锚与编号区间 == 检查表实际条数（离线 / 在线 / 变异三向）。
+
+    为什么要有这一面：M6 发布物的 README 曾同时写"离线 10 条 + 在线 6 条"（=16）与"18 组变异"
+    ——自相矛盾，而且没有任何判据把数字钉住。这里钉住它：改检查表而不同步 README → 红。
+    """
+    gate = _load_release_gate()
+    declared = gate.documented_gate_counts(readme_text)
+    assert declared is not None, (
+        "README 缺少机读条数锚 `release-gate-counts offline=… online=… mutations=…`"
+    )
+    assert declared["offline"] == len(gate.OFFLINE_CHECKS), (
+        "README 登记离线 %d 条 ≠ 检查表实际 %d 条" % (declared["offline"], len(gate.OFFLINE_CHECKS))
+    )
+    assert declared["online"] == len(gate.ONLINE_CHECKS), (
+        "README 登记在线 %d 条 ≠ 检查表实际 %d 条" % (declared["online"], len(gate.ONLINE_CHECKS))
+    )
+    assert declared["mutations"] == len(gate._mutation_worlds()), (  # noqa: SLF001
+        "README 登记变异 %d 组 ≠ 实际 %d 组"
+        % (declared["mutations"], len(gate._mutation_worlds()))  # noqa: SLF001
+    )
+    ranges = gate._GATE_RANGE_RE.search(readme_text)  # noqa: SLF001
+    assert ranges is not None, "README 缺少检查编号区间 `离线 C01–C… / 在线 O01–O…`"
+    assert int(ranges.group(1)) == len(gate.OFFLINE_CHECKS), "README 的离线区间与实际条数不符"
+    assert int(ranges.group(2)) == len(gate.ONLINE_CHECKS), "README 的在线区间与实际条数不符"
+
+
+def test_release_gate_counts_extractor_is_not_vacuous(repo_root, readme_text):
+    """抽取器自证 + **可证伪**：锚缺席必须返回 None；数字改掉必须读到改后的值。"""
+    gate = _load_release_gate()
+    assert gate.documented_gate_counts(readme_text) is not None, "真实 README 上抽不到锚"
+    assert gate.documented_gate_counts("这一行没有锚") is None, "锚缺席被当成了「抽到零条」"
+    probe = gate.documented_gate_counts("release-gate-counts offline=1 online=2 mutations=3")
+    assert probe == {"offline": 1, "online": 2, "mutations": 3}, (
+        "抽取器没有读到改后的值（可能把数字写死成了默认值）：%r" % (probe,)
+    )
