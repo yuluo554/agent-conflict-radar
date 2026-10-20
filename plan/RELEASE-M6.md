@@ -282,11 +282,32 @@ sha256 相同"当场证明它不影响包体——**没有**把任何 FAIL 降�
 | 数据台账 | `data/README.md` 补机读复核锚 `next_review: 2027-01-17`（只加锚，不改既有数字） |
 | 交接 | `.gitignore` 加 `update/`（交接目录不再让 C01 变红） |
 
-### 9.3 待追加（tag 之后按真实 UTC 补齐）
+### 9.3 tag 后事实（真实 UTC）
 
-- [ ] 发布提交 sha 与 annotated tag 对象（`git cat-file -t v0.0.2` = `tag`）
-- [ ] `v0.0.2` 的 branch push run 与 tag push run（run id + 时刻 + 结论；含注解条数）
-- [ ] 附件 `agent_conflict_radar-0.0.2.tar.gz` 的字节数与 sha256（只写这里/Release 说明/登记文件，**不写进包内**）
-- [ ] `scripts/check_release.py --online --tag v0.0.2` 的结果（离线 + 在线全条数、exit 码）
-- [ ] **发布物视角复验**：`git clone --branch v0.0.2` 后跑**该树自带**的门 → 期望 0 FAIL
-- [ ] 中立目录解包跑 CLI（解压即用实证）
+| 时刻（UTC） | 动作 | 结果 |
+|---|---|---|
+| 2026-10-20T04:23:07Z | annotated tag `v0.0.2`（tagger 邮箱为 GitHub noreply） | tag 对象 `76f85969…` → commit `48e825e5f2306a9291b8d5e7592c69512941a049`（`git cat-file -t` = `tag`；远端 `git/ref/tags/v0.0.2` 的 `object.sha` 与本地一致 → O02 PASS） |
+| 2026-10-20T04:23:57Z→04:32:03Z | branch push run **`39369358990`**（`main`@`48e825e`） | ✅ **两腿全 success**（`ubuntu-latest` / `windows-latest` × py3.12，各 10 步） |
+| 2026-10-20T04:24:02Z→04:32:47Z | tag push run **`39369365885`**（`v0.0.2`） | ✅ **两腿全 success**（同上） |
+| 2026-10-20T04:34:26Z | `gh release create v0.0.2` + 手工上传附件 | Release 已发布（非 draft / 非 prerelease） |
+| 2026-10-20T04:35Z | `scripts/check_release.py --online --tag v0.0.2` | ✅ **19 条检查 0 FAIL，exit 0**（离线 C01–C12 + 在线 O01–O07） |
+| 2026-10-20T04:37Z | `git clone --branch v0.0.2` → 跑**该树自带**的门 `--online --tag v0.0.2` | ✅ **19 条检查 0 FAIL，exit 0** ← **发布物自证成立**（改前同一命令在 v0.0.1 上实测 4 FAIL / exit 1） |
+| 2026-10-20T04:38Z | 解包 sdist → 中立目录跑 CLI | `--version` → `0.0.2`；`--config <unpacked>/config/radar.toml selftest` → 「自检通过：配置 / 退出码契约 / 序列化契约 / 阶段表 / 包版本 五项正常」；`bench --bench-dir <unpacked>/bench` → **15/15、174 项 0 失败**；中立目录跑完残留 **0** 个文件 |
+
+**附件（手工上传，非 zipball）**
+
+| 项 | 值 |
+|---|---|
+| 名称 | `agent_conflict_radar-0.0.2.tar.gz` |
+| 字节数 | `434407` |
+| sha256 | `73c7fb7c621f03d9fbe929fb41c611e552fa78a703296d79ee2d11c56f7e421f`（与 GitHub 附件 `digest` 逐字符相同） |
+| 构建路径 | `--build-asset dist/release --tag v0.0.2`（`git archive` → 受控树 → sdist → 归档归一） |
+| 可复现性 | 登记入库**前**（提交 `2c3d8ec` 的树）与**后**（tag 树）各建一次，sha256 **逐字符相同** ← 这就是"登记先入库不改变包字节"的实测证据 |
+| 远端复核 | O05（集合 + 字节数）、O06（**真下载**复算 sha256）、O07（与 tag 树**逐字节**同源）全部 PASS |
+
+**CI 注解（本轮新矩阵）**：每条 run **1 条 notice**（`ubuntu-latest` 迁移 Ubuntu 26 的公告；
+`gh run view --log` 实测该 run 的镜像仍是 `ubuntu24/20261018.339`，即**尚未**迁到 Ubuntu 26）；
+**Node20 弃用 warning = 0 条**（改前 4 条）——actions v7 起效。
+
+**本轮仍「未验证」的（不许读成已验证）**：`tools/verify_mutation.py` 的写入型全组变异未跑
+（只跑了门自带的内存注入版 `--mutation`，19↔19）；`ubuntu-latest` 真正切到 Ubuntu 26 之后的矩阵未跑。

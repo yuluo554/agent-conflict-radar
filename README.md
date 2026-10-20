@@ -318,7 +318,8 @@ python scripts/check_release.py --mutation # 门自身变异验证：检查项�
 |---|---|
 | workflow | `.github/workflows/ci.yml`，双矩阵 `windows-latest` / `ubuntu-latest` × Python `3.12` |
 | 上一次全绿（**旧矩阵** `×3.8/3.12`，2026-10-18） | run `39113500854`（`main`@`dc68fab`，2026-10-18T08:58:24Z，四腿 success） |
-| 本矩阵（`×3.12`）的首轮 | 本轮改动推送后触发；run id / 时刻 / 注解条数按真实 UTC 追加在 `plan/RELEASE-M6.md` §九 |
+| 本矩阵（`×3.12`）首次全绿 | branch push run `39369358990`（`main`@`48e825e`，2026-10-20T04:23:57Z→04:32:03Z）与 tag push run `39369365885`（`v0.0.2`，2026-10-20T04:24:02Z→04:32:47Z）——两腿各 **10 步全 success** |
+| 注解 | 每条 run **1 条 notice**（`ubuntu-latest` 将迁移到 Ubuntu 26 的公告；该 run 实际镜像仍是 `ubuntu24/20261018.339`）；**Node20 弃用 warning = 0 条**（改前 4 条） |
 
 > 历史事实（不改写）：`ubuntu-latest` 自 **2026-10-19** 起迁移到 Ubuntu 26，此前所有 run 跑的都是旧镜像；
 > 迁移后**必须**看一次新 run 才能说"当前矩阵全绿"。
