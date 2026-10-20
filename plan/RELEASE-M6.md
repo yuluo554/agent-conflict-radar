@@ -362,4 +362,30 @@ exit 1
 
 ### 10.3 tag 后事实（真实 UTC）
 
-（发版后追加；见下方表格）
+| 时刻（UTC） | 动作 | 结果 |
+|---|---|---|
+| 2026-10-20T11:15:36Z | annotated tag `v0.0.3`（tagger 邮箱为 GitHub noreply） | tag 对象 `ef4658018df12c4f170d0effe25ddb25ef299dc9` → commit `9aaf0dd5884be231d0dee996dce33a0a610b9c09`（`git cat-file -t` = `tag`；远端 `git/ref/tags/v0.0.3` 的 `object.sha` 与本地**逐字符一致** → O02 PASS） |
+| 2026-10-20T11:17:38Z→11:26:47Z | branch push run **`39413913968`**（`main`@`9aaf0dd`） | ✅ **两腿全 success**（`ubuntu-latest` / `windows-latest` × py3.12） |
+| 2026-10-20T11:17:42Z→11:26:12Z | tag push run **`39413921289`**（`v0.0.3`） | ✅ **两腿全 success**（同上） |
+| 2026-10-20T11:27:49Z | `gh release create v0.0.3` + 手工上传附件 | Release 已发布（非 draft / 非 prerelease）；附件 digest 与本地副本、登记文件**三方一致** |
+| 2026-10-20T11:29Z | `scripts/check_release.py --online --tag v0.0.3`（HEAD 上） | ✅ **20 条检查 0 FAIL，exit 0**（离线 C01–C13 + 在线 O01–O07） |
+| 2026-10-20T11:31Z | `git clone --branch v0.0.3` → 跑**该树自带**的门 `--online --tag v0.0.3` | ✅ **20 条检查 0 FAIL，exit 0** ← 发布物自证 |
+| 2026-10-20T11:34Z | 该 tag 树 + 从该树安装的干净 venv → `python tools/verify_mutation.py`（全量） | ✅ **36 组全检出、0 假门，仓库按字节还原**（基线 35 条守门全绿） ← **v0.0.2 在同一位置会炸（M6 锚点未命中）** |
+| 2026-10-20T11:50Z | 该 tag 树 `pytest -q` / `verify_offline.py --strict` | ✅ **398 passed / 1 skipped**；冒烟 **38 用例 0 失败**；跑完 `git status` 干净 |
+| 2026-10-20T11:55Z | 解包 sdist → 中立目录跑 CLI | `--version` → `0.0.3`；`--config <unpacked>/config/radar.toml selftest` → 五项正常；`bench --bench-dir <unpacked>/bench` → **15/15、174 项 0 失败**；中立目录残留 **0** 个文件 |
+
+**附件（手工上传，非 zipball）**
+
+| 项 | 值 |
+|---|---|
+| 名称 | `agent_conflict_radar-0.0.3.tar.gz` |
+| 字节数 | `442125` |
+| sha256 | `9778f5bc78adf741be33ef66e8ba1b624de684d073202745732e8278850f283e`（与 GitHub 附件 `digest` 逐字符相同） |
+| 构建路径 | `--build-asset dist/release --tag v0.0.3`（`git archive` → 受控树 → sdist → 归档归一） |
+| 可复现性 | 登记入库**前**（提交 `f319763` 的树）与**后**（tag 树 `9aaf0dd`）各建一次，sha256 **逐字符相同** |
+| 远端复核 | O05 / O06（**真下载**复算）/ O07（与 tag 树**逐字节**同源）全部 PASS |
+
+**CI 注解**：两条 run 各 **1 条 notice**（ubuntu 迁移公告）；**Node20 弃用 warning = 0 条**。
+
+**历史 tag/附件未动**：`v0.0.1` 对象 `bf26e6f1…`（附件 417182 B）、`v0.0.2` 对象 `76f85969…`
+（附件 434407 B）均与发布时一致。
