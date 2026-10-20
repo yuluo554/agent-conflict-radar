@@ -6,7 +6,8 @@
 > * tag 之后才产生的事实（附件 sha256、真下载复核、CI run id、失败轮次）**一律追加在文末追加事实节**，
 >   **不覆盖**本文件 §一–§七 的内容。
 >   * **§八 = `v0.0.1` 的 tag 后事实（历史照录，不删不改）**；
->   * **§九 = `v0.0.2` 的 tag 后事实**（本迭代新增；它同时是"发布物自证"这条缺陷的修复记录）。
+>   * **§九 = `v0.0.2` 的 tag 后事实**（"发布物自证"这条缺陷的修复记录）；
+>   * **§十 = `v0.0.3` 的 tag 后事实**（"工具锚点含版本号"这条缺陷的修复记录）。
 > * 时间一律写**真实 UTC 时刻**（K7：这是事件记录，不是产物判定）。
 > * 本文件**不含**发布附件自身的 sha256——那是 tag 之后的事实，且写进源码包会造成自指
 >   （下次构建的字节会变，sha256 必然过期，K17）。附件登记落在 `plan/release-assets.json`。
@@ -19,13 +20,13 @@
 |---|---|
 | 仓库 | `yuluo554/agent-conflict-radar`（公开） |
 | 包名 / 导入名 | `agent-conflict-radar` / `agent_conflict_radar` |
-| 版本 | `0.0.2`（`src/agent_conflict_radar/__init__.py` 的 `__version__` 是唯一来源） |
+| 版本 | `0.0.3`（`src/agent_conflict_radar/__init__.py` 的 `__version__` 是唯一来源） |
 | 许可 | MIT（`LICENSE` 文件 + `pyproject.toml` 的 `license = "MIT"` + `license-files`，PEP 639 形态） |
 | 运行时依赖 | **零**（`dependencies = []`）；dev extra = `pytest` + `build` + `wheel` |
 | 底线解释器 | Python **3.12**（3.8 已于 2024-10-07 EOL，本迭代抬地板：`requires-python` + classifier + CI 矩阵 + README 四处同口径） |
 | 命令面 | **7/7**：`config` / `selftest` / `scan` / `intent` / `detect` / `report` / `bench` |
 | 退出码 | 只有 `0/1/2/3`（K1） |
-| 附录 | `v0.0.1` 的发布坐标是 **0.0.1 / Python 3.8 / 许可 TOML 表形态**——见 §八「v0.0.1 tag 后追加事实」（历史照录，不覆盖） |
+| 附录 | `v0.0.1` 的发布坐标是 **0.0.1 / Python 3.8 / 许可 TOML 表形态**、`v0.0.2` 是 **0.0.2 / 13→12 条门**——见 §八/§九（历史照录，不覆盖） |
 
 **名字四向一致**（K14，发布前并排读一遍）：README H1 含 `agent-conflict-radar`；
 GitHub 仓库名 `agent-conflict-radar`；`pyproject.toml` 的 `name = "agent-conflict-radar"`；
@@ -40,7 +41,7 @@ GitHub 仓库名 `agent-conflict-radar`；`pyproject.toml` 的 `name = "agent-co
 
 | 模式 | 判据 |
 |---|---|
-| 默认（离线） | C01–C12：工作树干净 / 无运行产物入库 / 名字四向 / 退出码冻结 / 矩阵自检 / 矩阵机器无关 / 提交面脱敏 / MANIFEST 覆盖 / **真建 sdist 核对** / **解包即用** / **发布件可复现**（同 ref 两次构建逐字节相同） / **文档条数与检查表对账**（C12：README 的机读锚 == 本表实际条数） |
+| 默认（离线） | C01–C13：工作树干净 / 无运行产物入库 / 名字四向 / 退出码冻结 / 矩阵自检 / 矩阵机器无关 / 提交面脱敏 / MANIFEST 覆盖 / **真建 sdist 核对** / **解包即用** / **发布件可复现**（同 ref 两次构建逐字节相同） / **文档条数与检查表对账**（C12） / **变异脚本锚点可落**（C13：`tools/verify_mutation.py` 的每组 marker 恰好命中 1 次，且包版本文件的锚点不含版本号字面量） |
 | `--online` | O01–O07：仓库公开 / annotated tag 指向发布提交 / CI **逐 job** 全 success / push 事件与 run 对账 / 附件集合与登记一致 / **逐个下载复算 sha256** / **附件与 tag 树逐字节同源** |
 | `--mutation` | 门自身的可证伪性：**检查项数 == 变异组数**（当前 19 ↔ 19，`v0.0.1` 时为 18 ↔ 18），每条检查必须被对应变异打红 |
 
@@ -311,3 +312,54 @@ sha256 相同"当场证明它不影响包体——**没有**把任何 FAIL 降�
 
 **本轮仍「未验证」的（不许读成已验证）**：`tools/verify_mutation.py` 的写入型全组变异未跑
 （只跑了门自带的内存注入版 `--mutation`，19↔19）；`ubuntu-latest` 真正切到 Ubuntu 26 之后的矩阵未跑。
+
+> 🔴 **后记（2026-10-20，v0.0.3 发布后补写）**：上面那条"写入型变异器未跑"**留了债**。
+> 发版后真跑了它，M6 当场抛 `AssertionError`——因为它的 marker 还写着 `__version__ = "0.0.1"`，
+> 而包内已是 `0.0.2`。**包内容没错、门也没错**，但"下载者按 README 跑工具会炸"这条与
+> v0.0.1 的 4 FAIL 是同一类：**测试与发布门都覆盖不到的地方**。v0.0.3 已修（锚点改不含版本号）
+> 并新增门 **C13** + `tests/test_mutation_anchors.py` 把它变成发布前可发现的事。详见 §十。
+
+---
+
+## 十、`v0.0.3` 的 tag 后追加事实
+
+### 10.1 为什么会有这次发布（tag 前已固定的事实）
+
+`v0.0.2` 的附件内容是对的（`--online` 在 tag 树里 19 条 0 FAIL），但它带着一处**工具级**缺陷：
+
+```
+$ cd <clone v0.0.2> && python tools/verify_mutation.py --only M6
+AssertionError: M6：锚点未命中 src/agent_conflict_radar/__init__.py（marker 漂了或撞了 docstring）
+exit 1
+```
+
+根因：`tools/verify_mutation.py` 的 M6 变异把 marker 写成 `__version__ = "0.0.1"`，而 v0.0.2 里
+`__version__` 已是 `0.0.2`。**这不是"发布物内容陈旧"，是"锚点里含版本号"这个设计缺陷**：
+每次发版都会失效，而且只在**运行到那一组**时才暴露——测试全绿、发布门全绿、包已上传，
+只有下载者会撞上。
+
+修法（**不放宽任何判据**）：
+
+1. 锚点改成 `__version__ = "` + 把余下的原值注释掉 → **不含版本号**，发版不再失效；
+2. 新增离线检查 **C13**：AST 解析 `tools/verify_mutation.py` 的 MUTATIONS 表，断言每组
+   marker 目标文件存在且**恰好命中 1 次**、replacement ≠ marker、包版本文件的锚点**不含版本号字面量**；
+3. 新增测试 `tests/test_mutation_anchors.py`（5 条）：同一套判据 + "组号唯一" + "`must_fail` 指向的
+   测试必须真实存在"（pytest 对不存在的 node id 返回非零，会被变异脚本误读成"抓到了"）+ 一条
+   **可证伪自证**（人为造坏的三种锚点必须被报出来）；
+4. 配变异组 **R20** → 门的 `--mutation` 由 19↔19 变 **20↔20**。
+
+**负控（在 v0.0.2 的发布物上实测）**：把新测试拷进 v0.0.2 的 tag 树再跑 → **2 failed / 3 passed**，
+报的正是 `M6：marker 在 … 里命中 0 次` 与 `锚点里含版本号字面量`。
+
+### 10.2 `v0.0.3` 相对 `v0.0.2` 的变更（tag 前）
+
+| 类别 | 变更 |
+|---|---|
+| 工具（核心） | `tools/verify_mutation.py` 的 M6 锚点改为**不含版本号**（`__version__ = "` + 注释余值） |
+| 门 | 新增第 13 条离线检查 **C13**（变异脚本锚点可落）+ 变异组 R20 → `--mutation` **20↔20** |
+| 测试 | 新增 `tests/test_mutation_anchors.py`（5 条，含可证伪自证）；全套 **398 passed / 1 skipped** |
+| 文档 | README 机读锚改 `offline=13 online=7 mutations=20`、区间改 `C01–C13`；`plan/07` 新增 **K23** |
+
+### 10.3 tag 后事实（真实 UTC）
+
+（发版后追加；见下方表格）

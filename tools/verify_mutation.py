@@ -90,10 +90,13 @@ MUTATIONS: List[Mutation] = [
     Mutation(
         "M6",
         "src/agent_conflict_radar/__init__.py",
-        '__version__ = "0.0.1"',
-        '__version__ = "9.9.9"',
+        '__version__ = "',
+        '__version__ = "9.9.9"  # "',
         "tests/test_readme_gate.py::test_product_name_is_consistent_four_ways",
-        "包内版本号与安装元数据不一致 → 名字/版本四向一致门禁必须变红",
+        "包内版本号与安装元数据不一致 → 名字/版本四向一致门禁必须变红。"
+        "锚点**刻意不含版本号**（`__version__ = \"` + 把剩余部分注释掉）："
+        "首版锚点写成 `__version__ = \"0.0.1\"`，v0.0.2 发版后当场锚点未命中——"
+        "含版本号的锚点每次发版都会失效，而失效时脚本会按三重断言报错（不是静默 no-op）",
     ),
     Mutation(
         "M7",

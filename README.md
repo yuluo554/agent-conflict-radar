@@ -6,21 +6,26 @@
 
 ---
 
-## ✅ 已发布：v0.0.2（2026-10-20），命令面 7/7
+## ✅ 已发布：v0.0.3（2026-10-20），命令面 7/7
 
 七条命令全部落地，合成冲突矩阵与意图矩阵已入仓可审计，`radar bench` 可**一键复跑评分**。
 
-**发布物**：[Release v0.0.2](https://github.com/yuluo554/agent-conflict-radar/releases/tag/v0.0.2)
-附**手工上传**的源码包 `agent_conflict_radar-0.0.2.tar.gz`。sha256 **不写进包内**（自指必过期，K17）：
+**发布物**：[Release v0.0.3](https://github.com/yuluo554/agent-conflict-radar/releases/tag/v0.0.3)
+附**手工上传**的源码包 `agent_conflict_radar-0.0.3.tar.gz`。sha256 **不写进包内**（自指必过期，K17）：
 数值见该 Release 说明与 `plan/release-assets.json`——该文件在 **tag 之前**入库（它不在源码包里，
 所以进树**不改变包字节**），这正是"从 tag 树 clone 出来跑门也 0 FAIL"的前提。
 CI：双矩阵 `windows/ubuntu × 3.12`（3.8 已 EOL 退役）；索引见「开发与测试」一节。
 
-`scripts/check_release.py` 是**发布终态自检门**（离线 C01–C12 / 在线 O01–O07，刻意不进 CI）。
-下面这行是**机读条数锚**：`release-gate-counts offline=12 online=7 mutations=19`——离线 12 条 +
-在线 7 条 = **19 条检查**，门自身变异 **19 组**（**检查项数 == 变异组数**）。
+`scripts/check_release.py` 是**发布终态自检门**（离线 C01–C13 / 在线 O01–O07，刻意不进 CI）。
+下面这行是**机读条数锚**：`release-gate-counts offline=13 online=7 mutations=20`——离线 13 条 +
+在线 7 条 = **20 条检查**，门自身变异 **20 组**（**检查项数 == 变异组数**）。
 这组数字由门自己的 **C12** 与 `tests/test_readme_gate.py` 的第六面双向对账：改检查表而不同步这里
 → 门红、测试红。发布时 `--online` 无 FAIL **是在 tag 树里跑同一份门验出来的**（发布物自证）。
+
+> **v0.0.3 修的是什么**：v0.0.2 的包内容是对的，但 `tools/verify_mutation.py` 的 M6 锚点里写着
+> **上一版版本号**（`__version__ = "0.0.1"`，而包内是 `0.0.2`）——下载者照着本节跑那条工具会在
+> M6 当场 `AssertionError`（已实测 exit 1）。锚点改成**不含版本号**，并新增门 **C13**（+ 测试
+> `tests/test_mutation_anchors.py`）把"锚点必须恰好命中一次"变成发布前就能发现的事。
 
 | 命令 | 状态 | 计划里程碑 |
 |---|---|---|
@@ -304,8 +309,8 @@ CI：`.github/workflows/ci.yml`，双矩阵 `windows/ubuntu × Python 3.12`（�
 ### 发布终态自检（`scripts/check_release.py`，**刻意不进 CI**）
 
 ```bash
-python scripts/check_release.py            # 离线 C01–C12：工作树/产物/名字四向/退出码/矩阵/脱敏/MANIFEST/真建 sdist/解包即用/可复现/文档条数对账
-python scripts/check_release.py --online --tag v0.0.2   # 在线 O01–O07：公开/tag 指向/CI 逐 job/附件集合/逐个下载复算 sha256/附件与 tag 树同源
+python scripts/check_release.py            # 离线 C01–C13：工作树/产物/名字四向/退出码/矩阵/脱敏/MANIFEST/真建 sdist/解包即用/可复现/文档条数对账/变异锚点可落
+python scripts/check_release.py --online --tag v0.0.3   # 在线 O01–O07：公开/tag 指向/CI 逐 job/附件集合/逐个下载复算 sha256/附件与 tag 树同源
 python scripts/check_release.py --mutation # 门自身变异验证：检查项数 == 变异组数
 ```
 

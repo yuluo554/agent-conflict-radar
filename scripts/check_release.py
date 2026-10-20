@@ -34,6 +34,7 @@ Release"的注定失败的门，于是只能被跳过或被放宽——那是假
 """
 
 import argparse
+import ast
 import fnmatch
 import getpass
 import hashlib
@@ -1171,6 +1172,80 @@ def check_documented_gate_counts(ctx: Context) -> List[str]:
     return failures
 
 
+def check_mutation_script_anchors(ctx: Context) -> List[str]:
+    """C13 工具脚本的变异锚点必须可落（`tools/verify_mutation.py` 的 MUTATIONS 表）。
+
+    为什么这条要进**发布门**：`--mutation`（本门自带的内存注入版）与
+    `tools/verify_mutation.py`（**写入型**变异器）是两件东西。后者的锚点只有在**跑到那一组**
+    时才会被 `apply_mutation` 的三重断言发现——于是"锚点写着上一版版本号"这种缺陷能一路
+    通过测试、通过本门、被上传成 Release 附件，直到**下载者**按 README 跑它才当场炸。
+
+    实测（v0.0.2 已发布物，2026-10-20）：M6 的 marker 是 `__version__ = "0.0.1"`，而包内已是
+    `0.0.2` → `python tools/verify_mutation.py --only M6` 抛 AssertionError、exit 1。
+    所以判据落在**锚点本身**（读受控树里的脚本 + 目标文件），而不是"跑一次工具"：
+    * 目标文件存在，marker **恰好命中 1 次**（0 次 = 漂了；多次 = 不够特异，`replace(...,1)` 会改错处）；
+    * replacement ≠ marker（否则是静默 no-op）；
+    * 包版本文件的锚点里**不得含版本号字面量**（每次发版必失效）。
+    """
+    script = "tools/verify_mutation.py"
+    source = ctx.read(script)
+    failures: List[str] = []
+    # 用 AST 取 MUTATIONS：不执行脚本（它 import pytest 之外的实现细节、且不该被门跑起来）。
+    try:
+        tree = ast.parse(source)
+    except SyntaxError as exc:  # pragma: no cover - 语法坏掉时 C04 之外还会红
+        return ["%s 无法解析：%s" % (script, exc)]
+    anchors = _extract_mutation_anchors(tree)
+    if not anchors:
+        return [
+            "%s 里抽不到 MUTATIONS 表（抽取器失效比锚点漂移更危险：本项会静默变绿）" % script
+        ]
+    for ident, path, marker, replacement in anchors:
+        if marker == replacement:
+            failures.append("%s：replacement 与 marker 相同（静默 no-op）" % ident)
+            continue
+        try:
+            text = ctx.read(path)
+        except Exception:
+            failures.append("%s：目标文件不存在 %s" % (ident, path))
+            continue
+        hits = text.count(marker)
+        if hits != 1:
+            failures.append(
+                "%s：marker 在 %s 里命中 %d 次（要求恰好 1 次）：%r"
+                % (ident, path, hits, marker)
+            )
+        if path.endswith("__init__.py") and re.search(r"[\"']\d+\.\d+", marker):
+            failures.append(
+                "%s：包版本文件的锚点含版本号字面量（%r）——每次发版都会失效" % (ident, marker)
+            )
+    return failures
+
+
+def _extract_mutation_anchors(tree: "ast.Module") -> List[Tuple[str, str, str, str]]:
+    """从 `tools/verify_mutation.py` 的 AST 里抽 `(ident, path, marker, replacement)`。
+
+    只认 `Mutation("M…", "<path>", "<marker>", "<replacement>", "<must_fail>", "<note>")`
+    这种**全字面量**调用；任何一项不是字符串常量就跳过（它就不是可静态核对的锚点）。
+    """
+    found: List[Tuple[str, str, str, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        name = getattr(func, "id", None) or getattr(func, "attr", None)
+        if name != "Mutation":
+            continue
+        args = node.args
+        if len(args) < 4:
+            continue
+        values = [getattr(arg, "value", None) for arg in args[:4]]
+        if not all(isinstance(value, str) for value in values):
+            continue
+        found.append((values[0], values[1], values[2], values[3]))
+    return found
+
+
 OFFLINE_CHECKS: List[Tuple[str, str, Callable[[Context], List[str]]]] = [
     ("C01", "工作树 = 历史（无未提交改动）", check_worktree_clean),
     ("C02", "跟踪面不含运行/构建产物", check_no_ignored_artifacts),
@@ -1184,6 +1259,7 @@ OFFLINE_CHECKS: List[Tuple[str, str, Callable[[Context], List[str]]]] = [
     ("C10", "解包即用（从解包目录之外跑 CLI）", check_extracted_self_sufficient),
     ("C11", "发布件可复现（同 ref 两次构建逐字节相同）", check_asset_build_is_deterministic),
     ("C12", "文档登记的发布门条数与检查表一致", check_documented_gate_counts),
+    ("C13", "工具脚本的变异锚点可落（恰好命中 1 次）", check_mutation_script_anchors),
 ]
 
 ONLINE_CHECKS: List[Tuple[str, str, Callable[[Context], List[str]]]] = [
@@ -1231,7 +1307,7 @@ class Mutation(object):
 
 
 def _mutation_worlds() -> List[Mutation]:
-    """19 条变异——每条对应一条检查项（`run_mutation` 断言数量相等）。"""
+    """20 条变异——每条对应一条检查项（`run_mutation` 断言数量相等）。"""
 
     def c01() -> Context:
         root = _tmp_git_repo({"README.md": "x\n"})
@@ -1418,6 +1494,24 @@ def _mutation_worlds() -> List[Mutation]:
         readme = "release-gate-counts offline=1 online=1 mutations=1\n离线 C01–C1 / 在线 O01–O1\n"
         return Context(_tmp_tree({}), read=lambda rel: readme if rel == "README.md" else "")
 
+    def c13() -> Context:
+        # 变异脚本的锚点写着**上一版版本号**（v0.0.2 发布物实测的形态）→ C13 必红。
+        script = (
+            "class Mutation(object):\n"
+            "    def __init__(self, ident, path, marker, replacement, must_fail, note):\n"
+            "        pass\n"
+            "MUTATIONS = [\n"
+            '    Mutation("M6", "src/agent_conflict_radar/__init__.py",\n'
+            "             '__version__ = \"9.9.8\"', '__version__ = \"9.9.9\"',\n"
+            '             "tests/t.py::test_x", ""),\n'
+            "]\n"
+        )
+        files = {
+            "tools/verify_mutation.py": script,
+            "src/agent_conflict_radar/__init__.py": '__version__ = "9.9.9"\n',
+        }
+        return Context(_tmp_tree(files), read=lambda rel: files[rel])
+
     return [
         Mutation("R01", "C01", "工作树脏 → C01 必红", c01),
         Mutation("R02", "C02", "跟踪面含 out/ → C02 必红", c02),
@@ -1438,6 +1532,7 @@ def _mutation_worlds() -> List[Mutation]:
         Mutation("R17", "O07", "附件内容与 tag 树不一致 → O07 必红", o07),
         Mutation("R18", "C11", "归档归一被去掉（同 ref 两次构建不同）→ C11 必红", c11),
         Mutation("R19", "C12", "README 条数锚与实际不符 → C12 必红", c12),
+        Mutation("R20", "C13", "变异脚本锚点写着上一版版本号 → C13 必红", c13),
     ]
 
 
