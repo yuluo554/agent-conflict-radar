@@ -1,13 +1,13 @@
 {
   "assets": [
     {
-      "name": "agent_conflict_radar-0.0.3.tar.gz",
-      "sha256": "9778f5bc78adf741be33ef66e8ba1b624de684d073202745732e8278850f283e",
-      "size": 442125
+      "name": "agent_conflict_radar-0.0.4.tar.gz",
+      "sha256": "5c43530419054baeb8fb00118a3cc76ff8bbafd0cfc8e137e56035865b354f1e",
+      "size": 445269
     }
   ],
   "note": "发布附件登记（**tag 之前**入库；本文件不在 sdist 内，故不改变包字节）。zip/tar 内不写自身 sha256：自指必过期（K17）。本文件由 scripts/check_release.py --record-assets 生成，经 serialize.write_atomic 落盘（K2）。",
-  "recorded_at": "2026-10-20T11:15:35Z",
+  "recorded_at": "2026-10-24T04:23:44Z",
   "repository": "yuluo554/agent-conflict-radar",
-  "tag": "v0.0.3"
+  "tag": "v0.0.4"
 }
