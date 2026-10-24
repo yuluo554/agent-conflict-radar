@@ -6,12 +6,12 @@
 
 ---
 
-## ✅ 已发布：v0.0.3（2026-10-20），命令面 7/7
+## ✅ 已发布：v0.0.4（2026-10-23），命令面 7/7
 
 七条命令全部落地，合成冲突矩阵与意图矩阵已入仓可审计，`radar bench` 可**一键复跑评分**。
 
-**发布物**：[Release v0.0.3](https://github.com/yuluo554/agent-conflict-radar/releases/tag/v0.0.3)
-附**手工上传**的源码包 `agent_conflict_radar-0.0.3.tar.gz`。sha256 **不写进包内**（自指必过期，K17）：
+**发布物**：[Release v0.0.4](https://github.com/yuluo554/agent-conflict-radar/releases/tag/v0.0.4)
+附**手工上传**的源码包 `agent_conflict_radar-0.0.4.tar.gz`。sha256 **不写进包内**（自指必过期，K17）：
 数值见该 Release 说明与 `plan/release-assets.json`——该文件在 **tag 之前**入库（它不在源码包里，
 所以进树**不改变包字节**），这正是"从 tag 树 clone 出来跑门也 0 FAIL"的前提。
 CI：双矩阵 `windows/ubuntu × 3.12`（3.8 已 EOL 退役）；索引见「开发与测试」一节。
@@ -21,6 +21,18 @@ CI：双矩阵 `windows/ubuntu × 3.12`（3.8 已 EOL 退役）；索引见「�
 在线 7 条 = **20 条检查**，门自身变异 **20 组**（**检查项数 == 变异组数**）。
 这组数字由门自己的 **C12** 与 `tests/test_readme_gate.py` 的第六面双向对账：改检查表而不同步这里
 → 门红、测试红。发布时 `--online` 无 FAIL **是在 tag 树里跑同一份门验出来的**（发布物自证）。
+
+> **v0.0.4 修的是什么**：从 `v0.0.1` / `v0.0.3` 的**源码包解压树**里跑自带测试会红 **6 条**——
+> `test_tree_ref_prefers_the_tag_when_it_exists`、`test_mutation_run_catches_every_check`、
+> `test_repository_passes_the_cheap_checks[C02/C03/C07/C08]`。根因不是代码坏，是发布门的判据
+> 基准是 **`git archive <ref>` 导出的受控树**：解压树没有 `.git`，门按设计返回 exit 3
+> （「验不了」≠「验过了」），而测试把它读成了「失败」。现在这 6 条按本仓既有纪律
+> （`_git_available()` + `skipif` + 「缺依赖不是通过」）**显式跳过并写明原因**，
+> 同时把 C04/C06 两条**纯文件系统检查**单独留成一组，保证解压树里仍真跑（不是全 skip）。
+> 实测：仓库内 **398 passed / 1 skipped**，`git archive` 导出树内 **17 passed / 6 skipped**。
+> **附带的诚实说明**：`v0.0.1` 与 `v0.0.3` 的 Release 说明里写的「下载者照 README 跑同一份门
+> 也 0 FAIL」指的是 **`--online` 在 tag 树 clone 里跑**（有 `.git`），那句仍然成立；
+> 本版修的是「在**解压树**里跑 pytest」这一种跑法。
 
 > **v0.0.3 修的是什么**：v0.0.2 的包内容是对的，但 `tools/verify_mutation.py` 的 M6 锚点里写着
 > **上一版版本号**（`__version__ = "0.0.1"`，而包内是 `0.0.2`）——下载者照着本节跑那条工具会在
@@ -310,7 +322,7 @@ CI：`.github/workflows/ci.yml`，双矩阵 `windows/ubuntu × Python 3.12`（�
 
 ```bash
 python scripts/check_release.py            # 离线 C01–C13：工作树/产物/名字四向/退出码/矩阵/脱敏/MANIFEST/真建 sdist/解包即用/可复现/文档条数对账/变异锚点可落
-python scripts/check_release.py --online --tag v0.0.3   # 在线 O01–O07：公开/tag 指向/CI 逐 job/附件集合/逐个下载复算 sha256/附件与 tag 树同源
+python scripts/check_release.py --online --tag v0.0.4   # 在线 O01–O07：公开/tag 指向/CI 逐 job/附件集合/逐个下载复算 sha256/附件与 tag 树同源
 python scripts/check_release.py --mutation # 门自身变异验证：检查项数 == 变异组数
 ```
 

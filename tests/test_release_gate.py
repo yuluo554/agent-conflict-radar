@@ -15,6 +15,7 @@
 
 import importlib.util
 import shutil
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -22,6 +23,39 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _git_tree():
+    """本仓是否处于**真 git 仓库**里（而不是 sdist 解压树）。
+
+    发布门的内容基准是「受控树」——`git archive <ref>`。没有 `.git` 时门会抛
+    `EnvironmentMissing`（工具据此返回 exit 3「环境缺失」，这是**正确**语义：
+    "验不了"不等于"验过了"）。但测试不能把它读成"代码坏了"。
+
+    实测（v0.0.1 / v0.0.3 的 sdist 解压树，2026-10-23）：6 条用例红，全部是
+    这个原因——`test_tree_ref_prefers_the_tag_when_it_exists`、`test_mutation_run_catches_every_check`、
+    以及 `test_repository_passes_the_cheap_checks[C02/C03/C07/C08]`；同一份代码在
+    仓库态（本文件所在仓）是 23 passed。sdist 里跑自带测试的人会看到 6 个红。
+
+    故这里按本仓既有纪律显式跳过并写明原因（`chdir` 到 `REPO_ROOT` 再问 git，
+    避免"测试跑在别处"时误判）。
+    """
+    if shutil.which("git") is None:
+        return False
+    completed = subprocess.run(
+        ["git", "rev-parse", "--git-dir"], cwd=str(REPO_ROOT),
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    return completed.returncode == 0
+
+
+#: 需要"真 git 仓库"才能跑的用例（依据受控树做判定的那些）。
+_GIT_REASON = (
+    "需要真 git 仓库：发布门的判据基准是 `git archive <ref>` 导出的受控树；"
+    "sdist 解压树没有 .git，工具按设计返回 exit 3（环境缺失 ≠ 通过）。"
+    "本仓内跑全绿（23 passed）。"
+)
+needs_git = pytest.mark.skipif(not _git_tree(), reason=_GIT_REASON)
 
 
 def _load_gate():
@@ -86,6 +120,7 @@ def test_attachment_identity_is_checked_against_the_tag_tree(gate):
     assert "tag 树" in titles["O07"] and "逐字节" in titles["O07"]
 
 
+@needs_git
 def test_tree_ref_prefers_the_tag_when_it_exists(gate):
     """`tree_ref()`：本地有 tag 时必须用 tag，否则 tag 后的追加提交会让"同源"失效。
 
@@ -114,6 +149,7 @@ def test_check_count_equals_mutation_count(gate):
         assert len(hits) == 1, "检查项 %s 的变异数为 %d（要求 1）" % (ident, len(hits))
 
 
+@needs_git
 def test_mutation_run_catches_every_check(gate):
     """真跑变异：每条检查都被对应变异打红（这是"门不是假门"的正面证据）。"""
     code = gate.run_mutation(verbose=False)
@@ -125,15 +161,41 @@ def test_mutation_run_catches_every_check(gate):
 # --------------------------------------------------------------------------------------
 
 
+#: 这些检查项**只用文件系统**（不读受控树），sdist 解压树里同样能跑，故不跳过。
+#: 实测（2026-10-23，`git archive HEAD` 导出树 + 本文件）：C02/C04/C06/C08 里
+#: C04/C06 在无 .git 时本来就能过，**不该**跟着一起 skip —— 跳过面要按实测收窄，
+#: 「稳妥起见全跳」会把"这条检查还能不能跑"的证据一起丢掉。
+_FS_ONLY_CHECKS = ("C04", "C06")
+
+
+@needs_git
 @pytest.mark.parametrize(
     "ident",
-    ["C02", "C03", "C04", "C06", "C07", "C08"],
+    ["C02", "C03", "C07", "C08"],
 )
 def test_repository_passes_the_cheap_checks(gate, ident):
-    """真实仓库上的低成本检查必须全过（C01 由"提交后"状态决定，不在此列）。"""
+    """真实仓库上的低成本检查必须全过（C01 由"提交后"状态决定，不在此列）。
+
+    这四项的判据读**受控树**（`git archive <ref>`），无 `.git` 时门按设计抛
+    `EnvironmentMissing`（exit 3），故标 `needs_git`；`C04`/`C06` 是纯文件系统检查，
+    移到下一条，在导出树里也要跑。
+    """
     func = dict((i, f) for i, _t, f in gate.OFFLINE_CHECKS)[ident]
     problems = func(gate.Context(gate.REPO_ROOT))
     assert problems == [], "\n  ".join(["%s 在真实仓库上未通过：" % ident] + problems)
+
+
+@pytest.mark.parametrize("ident", _FS_ONLY_CHECKS)
+def test_repository_passes_the_filesystem_only_checks_anywhere(gate, ident):
+    """**纯文件系统检查在无 .git 的导出树里也必须过**（sdist 自带测试的最基本一半）。
+
+    与上一条分开的理由：上一条要求"真 git 仓库"（受控树是判据基准），这一条要求
+    **相反**——它证明"下载源码包的人至少能跑通这几条"。两条同时存在，才不会出现
+    「全都 skip 了，于是源码包自带测试等于没测」。
+    """
+    func = dict((i, f) for i, _t, f in gate.OFFLINE_CHECKS)[ident]
+    problems = func(gate.Context(gate.REPO_ROOT))
+    assert problems == [], "\n  ".join(["%s 未通过：" % ident] + problems)
 
 
 def test_manifest_coverage_is_not_vacuous(gate):
